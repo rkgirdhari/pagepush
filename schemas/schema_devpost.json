@@ -1,0 +1,174 @@
+{
+  "id": "devpost",
+  "version": "2026-10-28",
+  "title": "Devpost hackathon submission",
+  "offer": {
+    "name": "Hackathon Submission Sprint",
+    "priceUsd": 25,
+    "promise": "One project pack, filled into each hackathon form you already have open. You confirm on your phone before any invite is sent or any entry is submitted."
+  },
+  "sources": [
+    {
+      "title": "Know your submission steps",
+      "url": "https://help.devpost.com/article/126-know-your-submission-steps"
+    },
+    {
+      "title": "How the submission period is set up",
+      "url": "https://help.devpost.com/article/145-how-do-i-set-up-the-submission-period"
+    },
+    {
+      "title": "Uploading a demo video",
+      "url": "https://help.devpost.com/article/85-uploading-a-demo-video"
+    }
+  ],
+  "rules": {
+    "nameMax": 60,
+    "hackathonTaglineMax": 140,
+    "builtWithMax": 25,
+    "videoHosts": ["youtube.com", "youtu.be", "vimeo.com", "youku.com"],
+    "videoNote": "The participant-facing error is 'Must be a valid YouTube, Vimeo, or Youku url.' Older organizer docs also mention Facebook; this shim follows the upload article.",
+    "taglineNote": "Organizer docs cap the hackathon tagline at 140 characters. The portfolio elevator pitch is reported at 200. This schema is the hackathon sprint, so 140 is the cap, tightened further when the live input's maxlength is lower.",
+    "captchaNote": "Creating a project at /software/new asks for the name and a reCAPTCHA before Save and continue. The shim fills the name and leaves the captcha.",
+    "binding": "Label first. Devpost does not publish input name attributes.",
+    "storyHeadings": [
+      "Inspiration",
+      "What it does",
+      "How we built it",
+      "Challenges we ran into",
+      "Accomplishments that we're proud of",
+      "What we learned",
+      "What's next"
+    ]
+  },
+  "fields": [
+    {
+      "id": "projectName",
+      "labels": ["Project name", "Submission name"],
+      "path": "project.name",
+      "control": "text",
+      "required": true,
+      "maxLength": 60,
+      "step": "overview",
+      "phase": "draft",
+      "notes": "Required on the project overview. The create step also caps the name at 60 characters."
+    },
+    {
+      "id": "tagline",
+      "labels": ["Project tagline", "Submission tagline", "Elevator pitch"],
+      "path": "project.tagline",
+      "control": "text",
+      "required": true,
+      "maxLength": 140,
+      "step": "overview",
+      "phase": "draft"
+    },
+    {
+      "id": "story",
+      "labels": ["Project story", "Text description", "About the project"],
+      "path": "project.story",
+      "control": "textarea",
+      "required": true,
+      "step": "details",
+      "phase": "draft",
+      "notes": "One markdown field. Inspiration, What it does, and How we built it are headings inside it, not separate inputs."
+    },
+    {
+      "id": "builtWith",
+      "labels": ["Built with", "Built with tags"],
+      "match": "all-words",
+      "words": ["built", "with"],
+      "path": "project.builtWith",
+      "control": "tags",
+      "required": true,
+      "minItems": 1,
+      "maxItems": 25,
+      "itemMaxLength": 40,
+      "step": "details",
+      "phase": "draft",
+      "notes": "Tag widget. The shim types each tag and sends Enter. It does not insert chips itself."
+    },
+    {
+      "id": "tryItOut",
+      "labels": ["Try it out", "Try it Out links"],
+      "path": "project.tryItOut",
+      "control": "lines",
+      "addLabel": "Add link",
+      "format": "url",
+      "maxItems": 5,
+      "step": "details",
+      "phase": "draft"
+    },
+    {
+      "id": "videoUrl",
+      "labels": ["Video demo link", "Video demo"],
+      "path": "project.videoUrl",
+      "control": "url",
+      "format": "video",
+      "step": "details",
+      "phase": "draft",
+      "notes": "Public https URL on YouTube, Vimeo, or Youku. Required only when the hackathon target sets requiresVideo."
+    },
+    {
+      "id": "repositoryUrl",
+      "labels": ["URL to your code repository", "Code repository", "GitHub repository"],
+      "match": "all-words",
+      "words": ["repository"],
+      "path": "project.repositoryUrl",
+      "control": "url",
+      "format": "url",
+      "step": "additional",
+      "phase": "draft",
+      "notes": "Often a custom question. Treated as a known field when that prompt is on the page."
+    },
+    {
+      "id": "thumbnail",
+      "labels": ["Thumbnail", "Thumbnail image"],
+      "path": "project.thumbnail",
+      "control": "file",
+      "step": "overview",
+      "phase": "draft",
+      "notes": "JPG, PNG, or GIF, 5 MB max, 3:2 recommended. The browser will not accept a path from this shim; attach the file yourself."
+    },
+    {
+      "id": "gallery",
+      "labels": ["Image gallery", "Gallery"],
+      "path": "project.gallery",
+      "control": "file",
+      "step": "details",
+      "phase": "draft"
+    },
+    {
+      "id": "teammates",
+      "labels": ["Teammate email", "Team member email"],
+      "match": "all-words",
+      "words": ["teammate", "email"],
+      "addLabel": "Invite",
+      "path": "team.emails",
+      "control": "invites",
+      "format": "email",
+      "step": "team",
+      "phase": "commit",
+      "notes": "Sending an invite delivers email, so this waits for the phone confirm."
+    },
+    {
+      "id": "acceptedTerms",
+      "labels": ["Agree to the hackathon terms and conditions", "Agree to the Terms and Conditions"],
+      "match": "all-words",
+      "words": ["agree", "terms"],
+      "path": "attestations.acceptedTerms",
+      "control": "checkbox",
+      "step": "submit",
+      "phase": "commit",
+      "notes": "Checked only when the pack says the person accepted the terms, and only after the phone confirm."
+    },
+    {
+      "id": "submitEntry",
+      "labels": ["Submit", "Submit project", "Submit entry"],
+      "path": "attestations.acceptedTerms",
+      "control": "button",
+      "pick": "last",
+      "step": "submit",
+      "phase": "commit"
+    }
+  ]
+}

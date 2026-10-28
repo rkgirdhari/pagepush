@@ -1,0 +1,33 @@
+{
+  "project": {
+    "name": "Northline",
+    "tagline": "A map of what your hackathon team actually built",
+    "storySections": {
+      "inspiration": "Our team kept describing the project differently in every submission form.",
+      "whatItDoes": "Northline keeps one story, one stack, and one demo link, then fills each hackathon form from that pack.",
+      "howWeBuiltIt": "A label map for the Devpost submission steps, plus a phone confirm before invites or submit."
+    },
+    "builtWith": ["TypeScript", "Node.js"],
+    "tryItOut": ["https://northline.example", "https://northline.example/demo"],
+    "videoUrl": "https://www.youtube.com/watch?v=northline-demo",
+    "repositoryUrl": "https://github.com/example/northline"
+  },
+  "team": {
+    "emails": ["mina@example.com", "otto@example.com"]
+  },
+  "targets": [
+    {
+      "url": "https://devpost.com/hackathons/north-1",
+      "requiresVideo": true,
+      "acceptedTerms": false
+    },
+    {
+      "url": "https://devpost.com/hackathons/north-2",
+      "requiresVideo": true,
+      "acceptedTerms": false,
+      "questions": [
+        { "prompt": "Is your project new?", "answer": "Yes" }
+      ]
+    }
+  ]
+}

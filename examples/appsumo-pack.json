@@ -1,0 +1,86 @@
+{
+  "product": {
+    "name": "Northline",
+    "category": "project-management",
+    "subcategory": "task-management",
+    "alternativeTo": ["asana", "harvest"],
+    "integrations": ["slack", "stripe"],
+    "bestFor": ["freelancers", "small-agencies"]
+  },
+  "story": {
+    "tagline": "Client retainer tracking for agencies",
+    "usp": "See retainer burn as it happens",
+    "intro": "Agencies find out a retainer is overspent when the invoice is due. Northline shows the burn the moment anyone logs time.",
+    "tldr": [
+      "See remaining retainer hours the moment you log time",
+      "Send a branded client portal link in one click"
+    ],
+    "features": {
+      "sectionHeader": "Everything a retainer needs in one place",
+      "stories": [
+        {
+          "title": "Know what is left on every retainer",
+          "bullets": [
+            "Log time and the retainer bar updates before the invoice does",
+            "Archive a finished retainer without losing its history"
+          ]
+        },
+        {
+          "title": "Open a client portal in one click",
+          "bullets": [
+            "Send a branded portal link from the project page",
+            "Revoke that link without deleting the retainer"
+          ]
+        }
+      ]
+    }
+  },
+  "pricing": {
+    "model": "licensing",
+    "tiers": [
+      { "name": "Solo", "price": 49, "originalPrice": 180 },
+      { "name": "Studio", "price": 99, "originalPrice": 360, "recommended": true }
+    ],
+    "features": [
+      { "label": "Team seats", "values": ["1", "3"], "tooltip": "A seat is one teammate with their own login" },
+      { "label": "Active retainers", "values": ["5", "25"] },
+      { "label": "Client portals", "values": ["Included", "Included"] },
+      { "label": "API access", "values": ["Not included", "Included"] }
+    ]
+  },
+  "company": {
+    "headline": "Why we built Northline",
+    "narrative": "I kept losing retainer hours in a spreadsheet shared with nobody. The team found out a client was over budget when the invoice went out.\n\nNorthline shows the hours left on a retainer the moment someone logs time, and the client portal updates with it.",
+    "founder": {
+      "name": "Mina Calder",
+      "role": "Founder",
+      "linkedinUrl": "https://www.linkedin.com/in/mina-calder"
+    },
+    "founded": "2022-06-01",
+    "headquarters": "Austin, TX",
+    "teamSize": "1-10",
+    "stage": "Startup",
+    "funding": "Bootstrapped"
+  },
+  "faqs": [
+    { "question": "Is this a one-time payment?", "answer": "Yes. You pay once and keep the features in your tier." },
+    { "question": "What happens at the retainer limit?", "answer": "Logging time stops accepting new entries until you archive a retainer." },
+    { "question": "Can I export my data?", "answer": "Yes. A CSV of retainers, time entries, and invoices downloads from settings." },
+    { "question": "How long is the refund window?", "answer": "AppSumo refunds for 60 days." },
+    { "question": "How fast does support reply?", "answer": "Email sent to the support address gets a reply within one business day." },
+    { "question": "Can I move a client off the portal?", "answer": "You can revoke a portal link without deleting the retainer." }
+  ],
+  "links": [
+    { "label": "Help center", "url": "https://northline.example/help" }
+  ],
+  "fulfillment": {
+    "supportEmail": "founders@northline.example",
+    "instructions": ["Open the receipt email", "Redeem the code on the Northline site"],
+    "webhookUrl": "https://northline.example/appsumo/webhook",
+    "redirectUrl": "https://northline.example/appsumo/connected"
+  },
+  "media": {
+    "heroAlt": "Retainer dashboard",
+    "galleryAlts": ["Hours remaining", "Client portal"]
+  }
+}

@@ -1,0 +1,447 @@
+{
+  "id": "appsumo",
+  "version": "2026-10-28",
+  "title": "AppSumo partner listing",
+  "offer": {
+    "name": "AppSumo Application Service",
+    "priceUsd": 200,
+    "promise": "A finished listing draft in the partner editor, from your product facts. You read it and confirm on your phone before it is submitted for review."
+  },
+  "sources": [
+    {
+      "title": "AppSumo listing brief",
+      "url": "https://partners.appsumo.com/docs/listing-brief.md"
+    },
+    {
+      "title": "Connect an agent to AppSumo",
+      "url": "https://partners.appsumo.com/docs/agent-setup.md"
+    }
+  ],
+  "rules": {
+    "binding": "The listing brief says every field name matches a labelled field in the partner editor. This shim binds those labels. Searchable values must be chosen from the options on the page.",
+    "officialApi": "AppSumo also ships an MCP at https://appsumo.com/mcp/ with update_submission. writesTo is the path that tool expects. This package fills the open editor; it does not call the MCP.",
+    "submit": "submit_for_review waits until the partner has read the draft. The phone confirm is that approval.",
+    "trustSignals": "Stripe ARR, LinkedIn company page, G2, and Capterra stay manual. The shim never writes them.",
+    "secrets": "Licensing private keys and redemption code files stay out of the pack. Codes are attached in the editor by the partner.",
+    "voice": {
+      "banned": [
+        "seamless",
+        "robust",
+        "revolutionary",
+        "cutting-edge",
+        "game-changing",
+        "world-class",
+        "leverage",
+        "unlock",
+        "empower",
+        "elevate",
+        "showcasing",
+        "enhancing",
+        "streamlining"
+      ]
+    },
+    "enums": {
+      "teamSize": ["1-10", "11-50", "51-200", "201-500", "501+"],
+      "stage": ["Startup", "Growth", "Expansion", "Established"],
+      "funding": ["Bootstrapped", "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "Public Company", "Acquired"]
+    },
+    "pricing": {
+      "addTier": "Add tier",
+      "addFeature": "Add feature",
+      "tierName": "Tier name",
+      "price": "Price",
+      "originalPrice": "Original price",
+      "recommended": "Mark as Recommended",
+      "feature": "Feature",
+      "tooltip": "Tooltip",
+      "value": "Value"
+    },
+    "features": {
+      "add": "Add story",
+      "header": "Section header",
+      "title": "Title",
+      "bullets": "Bullets"
+    },
+    "faq": {
+      "add": "Add FAQ",
+      "question": "Question",
+      "answer": "Answer"
+    }
+  },
+  "fields": [
+    {
+      "id": "productName",
+      "labels": ["Product name"],
+      "path": "product.name",
+      "control": "text",
+      "required": true,
+      "minLength": 3,
+      "maxLength": 50,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "product.name"
+    },
+    {
+      "id": "category",
+      "labels": ["Category"],
+      "path": "product.category",
+      "control": "tokens",
+      "taxonomy": true,
+      "required": true,
+      "minItems": 1,
+      "maxItems": 1,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "product.attributes.category",
+      "notes": "Send the option slug. product.categories is a display name and does not drive the picker."
+    },
+    {
+      "id": "subcategory",
+      "labels": ["Subcategory"],
+      "path": "product.subcategory",
+      "control": "tokens",
+      "taxonomy": true,
+      "required": true,
+      "minItems": 1,
+      "maxItems": 1,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "product.attributes.subcategory"
+    },
+    {
+      "id": "tagline",
+      "labels": ["Tagline"],
+      "path": "story.tagline",
+      "control": "text",
+      "required": true,
+      "minLength": 3,
+      "maxLength": 100,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "story.subheader"
+    },
+    {
+      "id": "usp",
+      "labels": ["Unique selling proposition"],
+      "path": "story.usp",
+      "control": "text",
+      "required": true,
+      "minLength": 15,
+      "maxLength": 40,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "story.value_prop"
+    },
+    {
+      "id": "intro",
+      "labels": ["Intro sentence"],
+      "path": "story.intro",
+      "control": "textarea",
+      "required": true,
+      "maxLength": 205,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "story.tldr_overview"
+    },
+    {
+      "id": "tldr",
+      "labels": ["TL;DR"],
+      "path": "story.tldr",
+      "control": "lines",
+      "addLabel": "Add TL;DR",
+      "required": true,
+      "minItems": 2,
+      "maxItems": 2,
+      "itemMaxLength": 128,
+      "itemMinWords": 3,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "story.highlights[].highlight"
+    },
+    {
+      "id": "alternativeTo",
+      "labels": ["Alternative to"],
+      "path": "product.alternativeTo",
+      "control": "tokens",
+      "taxonomy": true,
+      "required": true,
+      "minItems": 1,
+      "maxItems": 3,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "product.attributes.alternative_to"
+    },
+    {
+      "id": "integrations",
+      "labels": ["Integrations"],
+      "path": "product.integrations",
+      "control": "tokens",
+      "taxonomy": true,
+      "maxItems": 5,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "product.attributes.integrations"
+    },
+    {
+      "id": "bestFor",
+      "labels": ["Best for"],
+      "path": "product.bestFor",
+      "control": "tokens",
+      "taxonomy": true,
+      "required": true,
+      "minItems": 1,
+      "maxItems": 3,
+      "step": "basics",
+      "phase": "draft",
+      "writesTo": "product.attributes.best_for"
+    },
+    {
+      "id": "icon",
+      "labels": ["Icon"],
+      "path": "media.icon",
+      "control": "file",
+      "required": true,
+      "step": "media",
+      "phase": "draft",
+      "writesTo": "assets.logos.logo",
+      "notes": "PNG or JPG under 5MB. Shortest side at least 50px. Logo mark only."
+    },
+    {
+      "id": "logo",
+      "labels": ["Logo"],
+      "path": "media.logo",
+      "control": "file",
+      "step": "media",
+      "phase": "draft",
+      "writesTo": "assets.logos.logo_long",
+      "notes": "Required for Launchpad and Select, optional for Radar. Use the real logo."
+    },
+    {
+      "id": "hero",
+      "labels": ["Hero image"],
+      "path": "media.hero",
+      "control": "file",
+      "required": true,
+      "step": "media",
+      "phase": "draft",
+      "writesTo": "assets.main_image",
+      "notes": "At least 960x540, under 5MB. Alt text up to 255 characters."
+    },
+    {
+      "id": "screenshots",
+      "labels": ["Product screenshots", "Screenshots"],
+      "path": "media.screenshots",
+      "control": "file",
+      "required": true,
+      "step": "media",
+      "phase": "draft",
+      "writesTo": "assets.additional_images",
+      "notes": "Up to 4 images, one per feature story, same order."
+    },
+    {
+      "id": "features",
+      "labels": ["Highlighted features"],
+      "path": "story.features",
+      "control": "features",
+      "required": true,
+      "step": "features",
+      "phase": "draft",
+      "writesTo": "story.features"
+    },
+    {
+      "id": "pricing",
+      "labels": ["Pricing"],
+      "path": "pricing",
+      "control": "pricing",
+      "required": true,
+      "step": "pricing",
+      "phase": "draft",
+      "writesTo": "plans[]"
+    },
+    {
+      "id": "headline",
+      "labels": ["Headline"],
+      "path": "company.headline",
+      "control": "text",
+      "required": true,
+      "maxLength": 64,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "company.founder_posts[].title"
+    },
+    {
+      "id": "narrative",
+      "labels": ["Founder narrative"],
+      "path": "company.narrative",
+      "control": "textarea",
+      "required": true,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "company.founder_posts[].message",
+      "notes": "At least two paragraphs. Each paragraph up to 3000 characters."
+    },
+    {
+      "id": "founderName",
+      "labels": ["Founder name", "Name"],
+      "path": "company.founder.name",
+      "control": "text",
+      "required": true,
+      "maxLength": 120,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "contacts[].name"
+    },
+    {
+      "id": "founderRole",
+      "labels": ["Role"],
+      "path": "company.founder.role",
+      "control": "text",
+      "maxLength": 120,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "contacts[].title"
+    },
+    {
+      "id": "founderLinkedIn",
+      "labels": ["Founder LinkedIn", "LinkedIn URL"],
+      "path": "company.founder.linkedinUrl",
+      "control": "url",
+      "format": "url",
+      "maxLength": 500,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "contacts[].linkedin_url",
+      "notes": "The founder's profile. The company LinkedIn page is a trust signal and is not this field."
+    },
+    {
+      "id": "founded",
+      "labels": ["Founded"],
+      "path": "company.founded",
+      "control": "date",
+      "format": "date",
+      "required": true,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "founders_data.founded_at",
+      "notes": "A full day, YYYY-MM-DD. A year on its own is not stored."
+    },
+    {
+      "id": "headquarters",
+      "labels": ["Headquarters"],
+      "path": "company.headquarters",
+      "control": "tokens",
+      "taxonomy": true,
+      "required": true,
+      "minItems": 1,
+      "maxItems": 1,
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "founders_data.headquarters",
+      "notes": "City or country from the list. Not Remote."
+    },
+    {
+      "id": "teamSize",
+      "labels": ["Team size"],
+      "path": "company.teamSize",
+      "control": "select",
+      "required": true,
+      "enum": ["1-10", "11-50", "51-200", "201-500", "501+"],
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "founders_data.company_size"
+    },
+    {
+      "id": "stage",
+      "labels": ["Stage"],
+      "path": "company.stage",
+      "control": "select",
+      "required": true,
+      "enum": ["Startup", "Growth", "Expansion", "Established"],
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "founders_data.product_stage"
+    },
+    {
+      "id": "funding",
+      "labels": ["Funding"],
+      "path": "company.funding",
+      "control": "select",
+      "required": true,
+      "enum": ["Bootstrapped", "Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "Public Company", "Acquired"],
+      "step": "story",
+      "phase": "draft",
+      "writesTo": "founders_data.financial_stage"
+    },
+    {
+      "id": "faqs",
+      "labels": ["FAQ"],
+      "path": "faqs",
+      "control": "faq",
+      "required": true,
+      "minItems": 1,
+      "step": "faq",
+      "phase": "draft",
+      "writesTo": "faqs[].question / faqs[].answer",
+      "notes": "At least one pair. Six to eight is what the brief recommends. Question up to 255 characters. Answer under two sentences."
+    },
+    {
+      "id": "supportEmail",
+      "labels": ["Support email"],
+      "path": "fulfillment.supportEmail",
+      "control": "email",
+      "format": "email",
+      "required": true,
+      "step": "redemption",
+      "phase": "draft"
+    },
+    {
+      "id": "redemptionInstructions",
+      "labels": ["Redemption instructions"],
+      "path": "fulfillment.instructions",
+      "control": "textarea",
+      "required": true,
+      "step": "redemption",
+      "phase": "draft",
+      "notes": "The steps a buyer follows after purchase. Pass an array of steps; the shim numbers them."
+    },
+    {
+      "id": "redeemUrl",
+      "labels": ["Redemption URL"],
+      "path": "fulfillment.redeemUrl",
+      "control": "url",
+      "format": "url",
+      "step": "redemption",
+      "phase": "draft",
+      "notes": "Codes deals. Where a buyer redeems a code."
+    },
+    {
+      "id": "webhookUrl",
+      "labels": ["Webhook URL"],
+      "path": "fulfillment.webhookUrl",
+      "control": "url",
+      "format": "url",
+      "step": "redemption",
+      "phase": "draft",
+      "notes": "Licensing deals. Public https URL that accepts the license event JSON. The private key is never a field here."
+    },
+    {
+      "id": "redirectUrl",
+      "labels": ["Redirect URL"],
+      "path": "fulfillment.redirectUrl",
+      "control": "url",
+      "format": "url",
+      "step": "redemption",
+      "phase": "draft",
+      "notes": "Licensing deals. Where buyers land after granting license access."
+    },
+    {
+      "id": "submitForReview",
+      "labels": ["Submit for review"],
+      "path": "attestations.submitForReview",
+      "control": "button",
+      "pick": "last",
+      "step": "submit",
+      "phase": "commit"
+    }
+  ]
+}
