@@ -6,7 +6,9 @@
   "description": "Human-confirmed form fills for Devpost hackathon submissions and AppSumo partner listings.",
   "scripts": {
     "test": "node --experimental-strip-types --test test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "model:pull": "node scripts/pull-qwen3.mjs",
+    "model:build": "rustup run stable cargo build --release --manifest-path native/candle-drafter/Cargo.toml"
   },
   "engines": {
     "node": ">=22"

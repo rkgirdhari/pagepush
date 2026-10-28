@@ -70,3 +70,38 @@ if (draft.unconfirmed.length === 0 && plan.errors.length === 0) {
 `planDevpostSprint` does the same across `{ url, document }[]` for forms the person already opened. Each hackathon has its own terms flag and its own confirm. The sprint does not sign in, does not create the project, and does not walk a hackathon index.
 
 Check the label strings against a live logged-in page before using a plan on a real account. The fixtures in `test/` are the label contract from the published docs, not a copy of Devpost's or AppSumo's markup.
+
+## When a write or a draft fails
+
+`executeDraft` keeps going if one field does not stick or throws. That field id is in `unconfirmed`. Pass `{ trace }` to record phase, code, and field id. The trace does not store what was written.
+
+`executeCommit` still refuses the whole commit on the first failure. `CommitRefused.applied` lists commit actions that already ran, so a later failure still tells you which invites went out. Fix the page before tapping confirm again.
+
+If AppSumo fields come back unconfirmed, `recoverListing` returns the same markdown as `renderListingPaste` plus a `paste-fallback` warning. `renderDevpostPaste` is the hackathon copy block for the same situation. Neither one clicks submit.
+
+## Local Qwen3 draft
+
+Copy drafts can come from a Candle runner pinned to Hugging Face `Qwen/Qwen3-0.6B-GGUF`, file `Qwen3-0.6B-Q8_0.gguf` (Q8_0, 639,446,688 bytes, the only GGUF in that repo). The tokenizer is `Qwen/Qwen3-0.6B` `tokenizer.json`. Checksums and revisions are in `models/qwen3-0.6b-q8.json`. The weights are not in git.
+
+```bash
+npm run model:pull
+rustup toolchain install stable --profile minimal
+npm run model:build
+```
+
+`npm run model:build` compiles `native/candle-drafter` with Rust 1.88 or newer (the crate's `rust-toolchain.toml` selects stable). The binary reads the GGUF through Candle's quantized Qwen3 loader, samples greedily, and stops when the reply contains one JSON object.
+
+`draftCopy` asks the local process for JSON, then checks length, voice, and that every content word, URL, email, date, and dollar amount already appeared in the facts. A slogan such as "reliable and affordable" is rejected when those words are not in the facts. A timeout, a missing file, invalid JSON, or a rejected field falls back to sentences from those facts. Facts that look like a private key, an API key, or redemption codes are not sent. The drafter does not fill the page and does not call `executeCommit`. Headquarters, taxonomy slugs, and prices stay in the pack you typed. `PAGE_PUSH_QWEN_SMOKE=1 npm test` runs one real completion when the weights and the release binary are both on disk. Ordinary `npm test` does not.
+
+```ts
+import { candleRunner, draftCopy } from "./src/index.ts";
+
+const draft = await draftCopy({
+  platform: "appsumo",
+  facts: "Northline tracks retainer hours for agencies. Clients see burn before the month ends.",
+  fields: [
+    { id: "tagline", maxLength: 100, minLength: 3 },
+    { id: "usp", maxLength: 40, minLength: 15 },
+  ],
+}, candleRunner());
+```

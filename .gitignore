@@ -1,2 +1,5 @@
 node_modules/
 *.tsbuildinfo
+models/weights/
+*.gguf
+native/candle-drafter/target/

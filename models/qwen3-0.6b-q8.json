@@ -1,0 +1,15 @@
+{
+  "runtime": "candle",
+  "architecture": "qwen3",
+  "repo": "Qwen/Qwen3-0.6B-GGUF",
+  "file": "Qwen3-0.6B-Q8_0.gguf",
+  "revision": "23749fefcc72300e3a2ad315e1317431b06b590a",
+  "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+  "bytes": 639446688,
+  "quant": "Q8_0",
+  "tokenizerRepo": "Qwen/Qwen3-0.6B",
+  "tokenizerRevision": "c1899de289a04d12100db370d81485cdf75e47ca",
+  "tokenizerFile": "tokenizer.json",
+  "tokenizerSha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+  "tokenizerBytes": 11422654
+}
