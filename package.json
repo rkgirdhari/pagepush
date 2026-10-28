@@ -1,0 +1,13 @@
+{
+  "name": "page-push",
+  "version": "0.1.0",
+  "description": "Browser extension that bridges AI content creation to Facebook Business Pages without copy-paste friction.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "icons": "python3 scripts/generate_icons.py",
+    "lint": "node --check src/background/service-worker.js"
+  },
+  "license": "UNLICENSED"
+}

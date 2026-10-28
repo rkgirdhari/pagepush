@@ -1,0 +1,340 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1c1e21;
+  background: #f0f2f5;
+  font-size: 13px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.pp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #1877f2;
+  color: white;
+}
+
+.pp-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.pp-icon-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.pp-main {
+  padding: 16px;
+}
+
+.pp-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.pp-field-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+  margin-top: 12px;
+  color: #65676b;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pp-select,
+.pp-input,
+.pp-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ccd0d5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: white;
+}
+
+.pp-textarea {
+  resize: vertical;
+  margin-top: 4px;
+}
+
+.pp-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 0 10px;
+  border-bottom: 1px solid #dadde1;
+}
+
+.pp-tab {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #65676b;
+  border-bottom: 2px solid transparent;
+}
+
+.pp-tab.active {
+  color: #1877f2;
+  border-bottom-color: #1877f2;
+}
+
+.pp-counter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #65676b;
+}
+
+.pp-counter.over-limit {
+  color: #e41e3f;
+  font-weight: 700;
+}
+
+.pp-fold-warning {
+  color: #f0a000;
+}
+
+.pp-warnings {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pp-warning {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.pp-warning.warn {
+  background: #fff4e5;
+  color: #92650a;
+}
+
+.pp-warning.error {
+  background: #fde2e2;
+  color: #a4182b;
+}
+
+.pp-warning.info {
+  background: #e8f0fe;
+  color: #1a4b8c;
+}
+
+.pp-image-zone {
+  margin-top: 12px;
+  border: 2px dashed #ccd0d5;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  background: white;
+}
+
+.pp-image-zone.dragover {
+  border-color: #1877f2;
+  background: #e8f0fe;
+}
+
+.pp-image-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #65676b;
+  font-size: 12px;
+}
+
+.pp-image-preview {
+  position: relative;
+  display: inline-block;
+}
+
+.pp-image-preview img {
+  max-width: 100%;
+  max-height: 160px;
+  border-radius: 8px;
+}
+
+.pp-image-preview .pp-icon-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #1c1e21;
+  color: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+.pp-cadence-warnings {
+  margin-top: 10px;
+}
+
+.pp-preview-toggle {
+  margin-top: 12px;
+}
+
+.pp-fb-preview {
+  margin-top: 8px;
+  border: 1px solid #dadde1;
+  border-radius: 10px;
+  background: white;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.pp-fb-preview img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.pp-schedule-row {
+  margin-top: 10px;
+}
+
+.pp-status {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.pp-status.success {
+  background: #e4f6ea;
+  color: #1a7a3c;
+}
+
+.pp-status.error {
+  background: #fde2e2;
+  color: #a4182b;
+}
+
+.pp-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.pp-btn {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pp-btn-primary {
+  background: #1877f2;
+  color: white;
+}
+
+.pp-btn-primary:hover {
+  background: #166fe0;
+}
+
+.pp-btn-secondary {
+  background: #e4e6eb;
+  color: #1c1e21;
+}
+
+.pp-btn-secondary:hover {
+  background: #d8dadf;
+}
+
+.pp-btn-ghost {
+  background: none;
+  border: 1px solid #ccd0d5;
+  color: #1c1e21;
+  width: 100%;
+}
+
+.pp-btn-link {
+  background: none;
+  border: none;
+  color: #1877f2;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.pp-history-list,
+.pp-template-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pp-history-item,
+.pp-template-item {
+  background: white;
+  border: 1px solid #dadde1;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.pp-history-item .pp-history-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #65676b;
+  margin-bottom: 4px;
+}
+
+.pp-history-item .pp-history-text {
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 60px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.pp-status-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.pp-status-badge.published {
+  background: #e4f6ea;
+  color: #1a7a3c;
+}
+
+.pp-status-badge.draft {
+  background: #fff4e5;
+  color: #92650a;
+}
+
+.pp-status-badge.failed {
+  background: #fde2e2;
+  color: #a4182b;
+}

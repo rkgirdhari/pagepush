@@ -1,0 +1,49 @@
+.page-push-button-wrapper {
+  display: inline-block;
+  margin-top: 6px;
+}
+
+.page-push-inline-button {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #1877f2;
+  background: #ffffff;
+  color: #1877f2;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.page-push-inline-button:hover {
+  background: #1877f2;
+  color: #ffffff;
+}
+
+.page-push-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #1c1e21;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  z-index: 2147483647;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  animation: page-push-fade-in 0.2s ease;
+}
+
+@keyframes page-push-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

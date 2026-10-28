@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Page Push — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="pp-opts-container">
+    <header class="pp-opts-header">
+      <span class="pp-opts-logo">📲</span>
+      <h1>Page Push Settings</h1>
+    </header>
+
+    <section class="pp-opts-section">
+      <h2>Connected Pages</h2>
+      <p class="pp-opts-hint">Tokens are encrypted and stored only on this device — Page Push has no backend server.</p>
+      <ul id="pagesList" class="pp-pages-list"></ul>
+      <button id="connectBtn" class="pp-opts-btn pp-opts-btn-primary">Connect a Page</button>
+    </section>
+
+    <section class="pp-opts-section">
+      <h2>Plan</h2>
+      <div id="planBadge" class="pp-plan-badge">Free</div>
+      <table class="pp-plan-table">
+        <tr><th></th><th>Free</th><th>Pro ($8/mo)</th><th>Agency ($25/mo)</th></tr>
+        <tr><td>Posts/week</td><td>3</td><td>Unlimited</td><td>Unlimited</td></tr>
+        <tr><td>Pages</td><td>1</td><td>1</td><td>Unlimited</td></tr>
+        <tr><td>Scheduling</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Templates</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Analytics</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Approvals &amp; bulk upload</td><td>—</td><td>—</td><td>✓</td></tr>
+      </table>
+      <select id="planSelect" class="pp-opts-select">
+        <option value="free">Free</option>
+        <option value="pro">Pro</option>
+        <option value="agency">Agency</option>
+      </select>
+    </section>
+
+    <section class="pp-opts-section">
+      <h2>Preferences</h2>
+      <label class="pp-opts-checkbox">
+        <input type="checkbox" id="warnOffHoursCheckbox" />
+        Warn when posting outside the optimal window (Tue–Thu, 8–10am / 7–9pm)
+      </label>
+      <label class="pp-opts-checkbox">
+        <input type="checkbox" id="warnFrequencyCheckbox" />
+        Warn when posting more than 2x/day
+      </label>
+      <label class="pp-opts-field">
+        Markdown rendering style
+        <select id="markdownStyleSelect" class="pp-opts-select">
+          <option value="unicode">Unicode bold/italic (𝐛𝐨𝐥𝐝)</option>
+          <option value="plain">Plain text (strip markdown)</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="pp-opts-section">
+      <h2>About &amp; Privacy</h2>
+      <p>Page Push does not log or transmit your post content anywhere except directly to Facebook's Graph API when you choose to publish, schedule, or draft a post.</p>
+      <a href="../../PRIVACY_POLICY.md" target="_blank">Privacy Policy</a>
+    </section>
+  </div>
+  <script src="options.js" type="module"></script>
+</body>
+</html>

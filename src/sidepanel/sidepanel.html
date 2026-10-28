@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Page Push</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header class="pp-header">
+    <div class="pp-brand">
+      <span class="pp-logo">📲</span>
+      <span class="pp-title">Page Push</span>
+    </div>
+    <button id="openOptions" class="pp-icon-btn" title="Settings &amp; connected Pages">⚙️</button>
+  </header>
+
+  <main class="pp-main">
+    <section id="noPageState" class="pp-empty-state hidden">
+      <p>No Facebook Page connected yet.</p>
+      <button id="connectPagesBtn" class="pp-btn pp-btn-primary">Connect a Page</button>
+    </section>
+
+    <section id="composeState" class="pp-compose hidden">
+      <label class="pp-field-label" for="pageSelect">Posting to</label>
+      <select id="pageSelect" class="pp-select"></select>
+
+      <div class="pp-tabs">
+        <button class="pp-tab active" data-tab="compose">Compose</button>
+        <button class="pp-tab" data-tab="history">History</button>
+        <button class="pp-tab" data-tab="templates">Templates</button>
+      </div>
+
+      <div id="composeTab" class="pp-tab-panel">
+        <label class="pp-field-label" for="postText">Post text</label>
+        <textarea id="postText" class="pp-textarea" rows="8" placeholder="Paste or capture content from ChatGPT, Claude, Notion, or Canva…"></textarea>
+
+        <div class="pp-counter-row">
+          <span id="charCounter" class="pp-counter">0 / 63,206</span>
+          <span id="foldWarning" class="pp-fold-warning hidden">⚠️ Past the "See more" fold (125)</span>
+        </div>
+
+        <div id="formatWarnings" class="pp-warnings"></div>
+
+        <div class="pp-image-zone" id="imageDropZone">
+          <input type="file" id="imageInput" accept="image/*" class="hidden" />
+          <div id="imageEmptyState" class="pp-image-empty">
+            <span>🖼️ Drag &amp; drop an image, paste a screenshot, or</span>
+            <button id="browseImageBtn" class="pp-btn pp-btn-link">browse…</button>
+          </div>
+          <div id="imagePreviewState" class="pp-image-preview hidden">
+            <img id="imagePreview" alt="Attached preview" />
+            <button id="removeImageBtn" class="pp-icon-btn" title="Remove image">✕</button>
+          </div>
+        </div>
+        <input type="text" id="altTextInput" class="pp-input hidden" placeholder="Alt text (accessibility &amp; SEO)" />
+        <div id="imageWarnings" class="pp-warnings"></div>
+
+        <div class="pp-cadence-warnings" id="cadenceWarnings"></div>
+
+        <div class="pp-preview-toggle">
+          <button id="togglePreviewBtn" class="pp-btn pp-btn-ghost">👁️ Preview as Facebook post</button>
+        </div>
+        <div id="facebookPreview" class="pp-fb-preview hidden"></div>
+
+        <div class="pp-schedule-row hidden" id="scheduleRow">
+          <input type="datetime-local" id="scheduleDateTime" class="pp-input" />
+        </div>
+
+        <div id="statusMessage" class="pp-status hidden"></div>
+
+        <div class="pp-action-row">
+          <button id="saveDraftBtn" class="pp-btn pp-btn-secondary">Save Draft</button>
+          <button id="scheduleBtn" class="pp-btn pp-btn-secondary">Schedule</button>
+          <button id="postNowBtn" class="pp-btn pp-btn-primary">Post Now</button>
+        </div>
+        <button id="confirmScheduleBtn" class="pp-btn pp-btn-primary hidden">Confirm Schedule</button>
+      </div>
+
+      <div id="historyTab" class="pp-tab-panel hidden">
+        <ul id="historyList" class="pp-history-list"></ul>
+      </div>
+
+      <div id="templatesTab" class="pp-tab-panel hidden">
+        <button id="saveAsTemplateBtn" class="pp-btn pp-btn-secondary">Save current text as template</button>
+        <ul id="templatesList" class="pp-template-list"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>
