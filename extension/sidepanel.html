@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Page Push</title>
+  <style>
+    :root {
+      --bg-950: #0a0e16;
+      --bg-900: #121826;
+      --bg-800: #1e2635;
+      --border: #30394a;
+      --gold-500: #f59e0b;
+      --gold-400: #fbbf24;
+      --text-100: #f3f4f6;
+      --text-400: #9aa4b2;
+      --emerald-400: #34d399;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg-950);
+      color: var(--text-100);
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px; }
+    .brand-title { font-size: 15px; font-weight: 700; color: var(--gold-400); letter-spacing: 0.01em; }
+    .brand-sub { font-size: 11px; color: var(--text-400); margin-top: 2px; }
+    .status-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg-900); border: 1px solid var(--border);
+      padding: 6px 10px; border-radius: 6px; margin-top: 8px; font-size: 11px;
+    }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--gold-500); margin-right: 6px; }
+    .dot.online { background: var(--emerald-400); }
+    section { background: var(--bg-900); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gold-400); margin-bottom: 8px; }
+    label { display: block; font-size: 11px; color: var(--text-400); margin-top: 8px; margin-bottom: 3px; }
+    input, textarea, select {
+      width: 100%; background: var(--bg-950); border: 1px solid #4b5563; color: var(--text-100);
+      border-radius: 5px; padding: 6px 8px; font-size: 12px; font-family: inherit;
+    }
+    textarea { min-height: 62px; resize: vertical; }
+    .btn-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    button {
+      cursor: pointer; background: var(--bg-800); color: var(--text-100);
+      border: 1px solid #4b5563; border-radius: 5px; padding: 6px 10px; font-size: 12px; font-weight: 600;
+    }
+    button.primary { background: var(--gold-500); color: #0a0e16; border-color: var(--gold-400); }
+    button:hover { filter: brightness(1.12); }
+    .node-list {
+      max-height: 170px; overflow-y: auto; background: var(--bg-950); border: 1px solid var(--border);
+      border-radius: 5px; padding: 6px; font-family: ui-monospace, monospace; font-size: 11px;
+    }
+    .node-item { padding: 4px; border-bottom: 1px solid #1a2230; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .node-item:last-child { border-bottom: none; }
+    .log-box {
+      background: var(--bg-950); border: 1px solid var(--border); border-radius: 5px; padding: 8px;
+      font-family: ui-monospace, monospace; font-size: 11px; max-height: 130px; overflow-y: auto; white-space: pre-wrap;
+    }
+    .hint { font-size: 10.5px; color: var(--text-400); margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand-title">Page Push</div>
+    <div class="brand-sub">Local-first Facebook Business Page co-pilot</div>
+    <div class="status-bar">
+      <span><span id="daemon-dot" class="dot"></span><span id="daemon-status">Checking local daemon...</span></span>
+      <button id="btn-ping" style="padding:2px 6px;font-size:10px;">Ping</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. Question &amp; Do profile setup</h2>
+    <label for="q-company">Company name</label>
+    <input id="q-company" placeholder="Your Company, LLC." />
+
+    <label for="q-focus">Primary product / value proposition</label>
+    <input id="q-focus" placeholder="What does your business do?" />
+
+    <label for="q-website">Website URL</label>
+    <input id="q-website" placeholder="https://example.com/" />
+
+    <label for="q-bio">Page bio (Facebook limits this to 255 characters)</label>
+    <textarea id="q-bio" maxlength="255" placeholder="Short description of your business..."></textarea>
+
+    <label for="q-post">Launch post</label>
+    <textarea id="q-post" placeholder="Announcement post for your first update..."></textarea>
+
+    <div class="btn-row">
+      <button class="primary" id="btn-synthesize">Generate draft copy</button>
+    </div>
+    <div class="hint">Works fully offline using built-in templates. If a local daemon is running at 127.0.0.1:8080, it is used instead for higher-quality drafts.</div>
+  </section>
+
+  <section>
+    <h2>2. Facebook page scan &amp; fill</h2>
+    <div class="btn-row" style="margin-top:0;margin-bottom:8px;">
+      <button class="primary" id="btn-scan-dom">1. Scan Facebook tab</button>
+      <button id="btn-plan-actions">2. Suggest fields</button>
+    </div>
+    <div id="dom-nodes" class="node-list">Open your Facebook Page tab, click "Scan Facebook tab".</div>
+    <div class="hint">Every fill or click below only happens when you press a button here — nothing runs automatically.</div>
+  </section>
+
+  <section>
+    <h2>3. Optional local bridge</h2>
+    <label for="bridge-target">Forward current draft to a peer endpoint</label>
+    <select id="bridge-target">
+      <option value="http://127.0.0.1:8080/api/v1/health">Local daemon health check</option>
+      <option value="http://127.0.0.1:8080/api/v1/interview">Local daemon copy generator</option>
+    </select>
+    <div class="btn-row">
+      <button id="btn-bridge-sync">Send</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Activity log</h2>
+    <div id="audit-log" class="log-box">[BOOT] Page Push ready.</div>
+  </section>
+
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>

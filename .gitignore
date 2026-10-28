@@ -1,0 +1,3 @@
+/daemon/target/
+*.gguf
+.DS_Store
