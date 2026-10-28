@@ -352,18 +352,22 @@ function matchedLabel(control: Control, field: FieldSchema): string {
 function missingTokens(control: Control, tokens: string[]): string[] {
   const options = listedOptions(control);
   if (!options.length) return [];
-  return tokens.filter((token) => !options.some((option) => labelKey(option.slug) === labelKey(token) || labelKey(option.text) === labelKey(token)));
+  return tokens.filter((token) => !options.some((option) => optionMatchesToken(option, token)));
 }
 
-function listedOptions(control: Control): { slug: string; text: string }[] {
+function listedOptions(control: Control): Element[] {
   const listId = control.element.getAttribute("aria-controls");
   const doc = control.element.ownerDocument;
   const list = listId && doc ? doc.getElementById(listId) : null;
   if (!list) return [];
-  return Array.from(list.querySelectorAll("[role='option']")).map((option) => ({
-    slug: option.getAttribute("data-slug") ?? "",
-    text: (option.textContent ?? "").trim(),
-  }));
+  return Array.from(list.querySelectorAll("[role='option']"));
+}
+
+function optionMatchesToken(option: Element, token: string): boolean {
+  const want = labelKey(token);
+  const ids = [option.getAttribute("data-slug"), option.getAttribute("value")];
+  const text = (option.textContent ?? "").trim();
+  return ids.some((id) => id != null && id !== "" && labelKey(id) === want) || labelKey(text) === want;
 }
 
 function selectHas(control: Control, value: string): boolean {

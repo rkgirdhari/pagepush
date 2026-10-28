@@ -423,17 +423,17 @@ function optionElements(el: Element): Element[] {
 }
 
 function optionMatches(option: Element, token: string): boolean {
-  const slug = option.getAttribute("data-slug") ?? option.getAttribute("value") ?? "";
-  const text = (option.textContent ?? "").trim();
   const want = labelKey(token);
-  return labelKey(slug) === want || labelKey(text) === want;
+  const ids = [option.getAttribute("data-slug"), option.getAttribute("value")];
+  const text = (option.textContent ?? "").trim();
+  return ids.some((id) => id != null && id !== "" && labelKey(id) === want) || labelKey(text) === want;
 }
 
 function tokenLanded(widget: Element, token: string, option?: Element): boolean {
   const want = labelKey(token);
   const label = labelKey(option?.textContent ?? "");
   for (const chip of widget.querySelectorAll("[data-tag], [role='option'][aria-selected='true']")) {
-    const tag = labelKey(chip.getAttribute("data-tag") ?? chip.getAttribute("data-slug") ?? "");
+    const tag = labelKey(chip.getAttribute("data-tag") ?? chip.getAttribute("data-slug") ?? chip.getAttribute("value") ?? "");
     const text = labelKey(chip.textContent ?? "");
     if (tag === want || text === want || (label && text === label)) return true;
   }

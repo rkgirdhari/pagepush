@@ -71,6 +71,28 @@ test("submit for review stays unclicked until the partner approves the draft", (
   });
 });
 
+test("a taxonomy slug on the option value is accepted", () => {
+  const doc = load(`
+    <div data-widget>
+      <label for="alternative">Alternative to</label>
+      <input id="alternative" role="combobox" aria-controls="alternative-list" data-chips="alternative-chips">
+      <ul id="alternative-list" role="listbox">
+        <li role="option" value="mondaycom">Monday</li>
+      </ul>
+      <ul id="alternative-chips"></ul>
+    </div>
+  `);
+  wireTokens(doc);
+  const plan = planAppSumo(doc, {
+    ...pack,
+    product: { ...pack.product, alternativeTo: ["mondaycom"] },
+  });
+  assert.equal(plan.errors.some((item) => item.code === "taxonomy-miss"), false, JSON.stringify(plan.errors));
+  const draft = executeDraft(doc, plan);
+  assert.equal(draft.unconfirmed.includes("alternativeTo"), false, draft.unconfirmed.join(","));
+  assert.equal(doc.querySelector("[role='option']")?.getAttribute("aria-selected"), "true");
+});
+
 test("unknown taxonomy values and over-limit copy are not written", () => {
   const doc = readyAppSumo();
   const missed = planAppSumo(doc, {
