@@ -43,6 +43,26 @@ export function executeDraft(doc: Document, plan: FillPlan, options: RunOptions 
   return { applied, unconfirmed };
 }
 
+/**
+ * Draft actions in `ids` (default: every draft action) whose control no longer holds the planned
+ * value. A non-empty result means the page drifted from what the person approved.
+ */
+export function checkDrift(doc: Document, plan: FillPlan, ids?: readonly string[]): string[] {
+  const wanted = ids ? new Set(ids) : null;
+  const drifted: string[] = [];
+  for (const action of plan.actions) {
+    if (action.phase !== "draft" || (wanted && !wanted.has(action.id))) continue;
+    let ok = false;
+    try {
+      ok = matchesAction(doc, action);
+    } catch {
+      ok = false;
+    }
+    if (!ok) drifted.push(action.id);
+  }
+  return drifted;
+}
+
 export function executeCommit(
   doc: Document,
   plan: FillPlan,

@@ -6,51 +6,233 @@
   <title>Page Push</title>
   <style>
     :root {
-      --bg: #f8fafc; --panel: #ffffff; --text: #0f172a; --muted: #475569; --line: #cbd5e1;
-      --accent: #b45309; --accent-text: #ffffff; --bad: #b91c1c; --warn: #a16207; --good: #15803d;
-      color-scheme: light dark;
+      --bg: #f6f7f9; --panel: #ffffff; --sunk: #eef1f5; --text: #111827; --muted: #4b5563; --line: #d4d9e1;
+      --accent: #b45309; --accent-text: #ffffff; --focus: #2563eb;
+      --info-bg: #eef4ff; --info: #1e40af; --good-bg: #ecfdf3; --good: #166534;
+      --warn-bg: #fffbeb; --warn: #92400e; --bad-bg: #fef2f2; --bad: #b91c1c;
+      color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #0b1120; --panel: #111827; --text: #e5e7eb; --muted: #94a3b8; --line: #334155;
-        --accent: #f59e0b; --accent-text: #111827; --bad: #f87171; --warn: #facc15; --good: #4ade80;
+        --bg: #0d1117; --panel: #161b22; --sunk: #0f141a; --text: #e6edf3; --muted: #9aa5b1; --line: #30363d;
+        --accent: #f59e0b; --accent-text: #111827; --focus: #60a5fa;
+        --info-bg: #10213f; --info: #93c5fd; --good-bg: #0f2a1a; --good: #86efac;
+        --warn-bg: #2b2210; --warn: #fcd34d; --bad-bg: #2d1416; --bad: #fca5a5;
+        color-scheme: dark;
       }
     }
-    body { margin: 0; padding: 12px; font: 13px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); }
-    h1 { font-size: 15px; margin: 0 0 4px; }
-    p.note { margin: 0 0 10px; color: var(--muted); }
-    textarea { width: 100%; min-height: 180px; box-sizing: border-box; font: 12px/1.4 ui-monospace, monospace;
-      background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
-    .row { display: flex; gap: 6px; margin: 8px 0; }
-    button { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel);
-      color: var(--text); font-weight: 600; cursor: pointer; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 12px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    h1 { font-size: 16px; margin: 0; }
+    #offer { color: var(--muted); font-size: 12px; text-align: right; }
+    h2 { font-size: 12px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    h3 { font-size: 13px; margin: 10px 0 4px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 0 0 10px; }
+    .banner { border-radius: 8px; padding: 8px 10px; margin: 0 0 10px; border: 1px solid transparent; }
+    .banner strong { display: block; }
+    .banner[data-tone="info"] { background: var(--info-bg); color: var(--info); }
+    .banner[data-tone="good"] { background: var(--good-bg); color: var(--good); }
+    .banner[data-tone="warn"] { background: var(--warn-bg); color: var(--warn); }
+    .banner[data-tone="bad"] { background: var(--bad-bg); color: var(--bad); }
+    .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .tier { border: 1px solid var(--line); border-radius: 8px; padding: 6px; cursor: pointer; display: block; }
+    .tier input { margin: 0 4px 0 0; }
+    .tier .price { font-weight: 700; display: block; }
+    .tier small { color: var(--muted); }
+    .tier:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+    label.field { display: block; margin: 6px 0 2px; font-weight: 600; font-size: 12px; }
+    .count { float: right; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .count[data-over="true"] { color: var(--bad); font-weight: 700; }
+    input[type="text"], input[type="url"], input[type="email"], input[type="tel"], select, textarea {
+      width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunk); color: var(--text); font: inherit;
+    }
+    textarea { min-height: 64px; resize: vertical; }
+    textarea#launch-post { min-height: 120px; }
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .days { display: grid; grid-template-columns: 90px 1fr; gap: 4px 6px; align-items: center; }
+    .row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    button { padding: 7px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
     button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    button.grow { flex: 1; }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
-    #status { padding: 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); margin: 8px 0; }
-    #status[data-tone="bad"] { color: var(--bad); }
-    #status[data-tone="good"] { color: var(--good); }
-    section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 8px 0; }
-    section h2 { font-size: 12px; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-    ul { margin: 0; padding-left: 18px; }
-    li.error { color: var(--bad); }
-    li.warning { color: var(--warn); }
-    code { font-size: 11px; word-break: break-all; }
+    button.danger { color: var(--bad); border-color: var(--bad); }
+    ul.issues, ul.plain { margin: 4px 0 0; padding-left: 18px; }
+    ul.issues li[data-level="error"] { color: var(--bad); }
+    ul.issues li[data-level="warning"] { color: var(--warn); }
+    ul.reasons { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 4px; border-top: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .badge { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid var(--line); white-space: nowrap; }
+    .badge[data-kind="commit"] { color: var(--accent); border-color: var(--accent); }
+    .badge[data-kind="applied"], .badge[data-kind="committed"] { color: var(--good); border-color: var(--good); }
+    .badge[data-kind="unconfirmed"], .badge[data-kind="drift"] { color: var(--bad); border-color: var(--bad); }
+    .muted { color: var(--muted); }
+    code { font: 11px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; word-break: break-all; }
+    .check { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; }
+    .paste { border-top: 1px solid var(--line); padding: 6px 0; }
+    .paste pre { margin: 4px 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.4 inherit; background: var(--sunk); padding: 6px; border-radius: 6px; }
+    .paste header { margin: 0; }
+    details > summary { cursor: pointer; font-weight: 700; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-  <h1>Page Push</h1>
-  <p class="note">Open your Facebook Business Page view in the active tab. Nothing is saved or posted until you click Approve &amp; Commit.</p>
-  <label for="pack">Project pack (JSON)</label>
-  <textarea id="pack" spellcheck="false"></textarea>
-  <div class="row">
-    <button id="plan">Plan this page</button>
-    <button id="draft" disabled>Draft</button>
+  <header>
+    <h1>Page Push</h1>
+    <div id="offer"></div>
+  </header>
+
+  <div id="banner" class="banner" role="status" aria-live="polite" data-tone="info">
+    <strong id="banner-title">Open your Facebook Business Page and fill in the client pack.</strong>
+    <span id="banner-detail">Nothing is saved or posted on Facebook until you click Approve &amp; Commit.</span>
   </div>
-  <div class="row">
-    <button id="commit" class="primary" disabled>Approve &amp; Commit</button>
-  </div>
-  <div id="status" role="status" aria-live="polite">No plan yet.</div>
-  <div id="plan-view"></div>
+
+  <section class="card" aria-labelledby="tier-heading">
+    <h2 id="tier-heading">Sprint tier</h2>
+    <div class="tiers" role="radiogroup" aria-labelledby="tier-heading">
+      <label class="tier"><input type="radio" name="tier" value="essentials"><span class="price">$5</span><small>Essentials</small></label>
+      <label class="tier"><input type="radio" name="tier" value="standard"><span class="price">$15</span><small>Standard Business</small></label>
+      <label class="tier"><input type="radio" name="tier" value="launch"><span class="price">$50</span><small>Full Launch + Post</small></label>
+    </div>
+    <div class="row">
+      <button id="starter" type="button">Start a blank pack</button>
+      <button id="import" type="button">Import JSON</button>
+      <button id="export" type="button">Export JSON</button>
+      <input id="import-file" type="file" accept="application/json,.json" hidden>
+    </div>
+  </section>
+
+  <form id="pack-form" class="card" autocomplete="off" aria-labelledby="pack-heading">
+    <h2 id="pack-heading">Client pack</h2>
+
+    <fieldset data-fields="pageName,categories,bio" style="border:0;padding:0;margin:0">
+      <h3>Page</h3>
+      <label class="field" for="page-name">Page name <span class="count" data-counter="page.name"></span></label>
+      <input id="page-name" type="text" data-path="page.name">
+      <label class="field" for="category-0">Categories (up to 3, as Facebook lists them)</label>
+      <div class="grid3">
+        <input id="category-0" type="text" data-path="page.categories.0" aria-label="Category 1">
+        <input id="category-1" type="text" data-path="page.categories.1" aria-label="Category 2">
+        <input id="category-2" type="text" data-path="page.categories.2" aria-label="Category 3">
+      </div>
+      <label class="field" for="bio">Bio <span class="count" data-counter="page.bio"></span></label>
+      <textarea id="bio" data-path="page.bio"></textarea>
+    </fieldset>
+
+    <fieldset data-fields="website,phone,email" style="border:0;padding:0;margin:0">
+      <h3>Contact</h3>
+      <label class="field" for="website">Website</label>
+      <input id="website" type="url" data-path="contact.website" placeholder="https://">
+      <div class="grid2">
+        <div><label class="field" for="phone">Phone</label><input id="phone" type="tel" data-path="contact.phone"></div>
+        <div><label class="field" for="email">Email</label><input id="email" type="email" data-path="contact.email"></div>
+      </div>
+    </fieldset>
+
+    <fieldset data-fields="address,city,zip" style="border:0;padding:0;margin:0">
+      <h3>Location</h3>
+      <label class="field" for="address">Street address</label>
+      <input id="address" type="text" data-path="contact.address">
+      <div class="grid2">
+        <div><label class="field" for="city">City/Town</label><input id="city" type="text" data-path="contact.city"></div>
+        <div><label class="field" for="zip">ZIP / postal code</label><input id="zip" type="text" data-path="contact.zip"></div>
+      </div>
+    </fieldset>
+
+    <fieldset data-fields="hoursMode" style="border:0;padding:0;margin:0">
+      <h3>Hours</h3>
+      <label class="field" for="hours-mode">Hours</label>
+      <select id="hours-mode" data-path="hours.mode"></select>
+      <div id="schedule" class="days" hidden>
+        <span class="muted" style="grid-column:1/-1">Opening times are listed for you to set by hand on Facebook.</span>
+      </div>
+    </fieldset>
+
+    <fieldset data-fields="ctaType,ctaUrl" style="border:0;padding:0;margin:0">
+      <h3>Action button</h3>
+      <div class="grid2">
+        <div><label class="field" for="cta-type">Button</label><input id="cta-type" type="text" list="cta-types" data-path="cta.type"></div>
+        <div><label class="field" for="cta-url">Link</label><input id="cta-url" type="url" data-path="cta.url" placeholder="https://"></div>
+      </div>
+      <datalist id="cta-types"></datalist>
+    </fieldset>
+
+    <fieldset data-fields="launchPost" style="border:0;padding:0;margin:0">
+      <h3>Launch post</h3>
+      <label class="field" for="launch-post">Post text <span class="count" data-counter="launchPost.text"></span></label>
+      <textarea id="launch-post" data-path="launchPost.text"></textarea>
+    </fieldset>
+
+    <fieldset data-fields="profilePicture,coverPhoto" style="border:0;padding:0;margin:0">
+      <h3>Images (you upload these on Facebook)</h3>
+      <div class="grid2">
+        <div><label class="field" for="media-profile">Profile picture</label>
+          <select id="media-profile" data-path="media.profilePicture"><option value="required">Required before commit</option><option value="optional">Optional</option></select></div>
+        <div><label class="field" for="media-cover">Cover photo</label>
+          <select id="media-cover" data-path="media.coverPhoto"><option value="required">Required before commit</option><option value="optional">Optional</option></select></div>
+      </div>
+    </fieldset>
+  </form>
+
+  <section class="card" aria-labelledby="run-heading">
+    <h2 id="run-heading">Run on the open Facebook tab</h2>
+    <ul id="pack-issues" class="issues" aria-live="polite" aria-label="Pack checks"></ul>
+    <div class="row">
+      <button id="plan" type="button" class="grow">1 · Plan this view</button>
+      <button id="draft" type="button" class="grow" disabled>2 · Draft</button>
+    </div>
+    <div class="row">
+      <button id="commit" type="button" class="primary grow" disabled>3 · Approve &amp; Commit</button>
+    </div>
+    <ul id="reasons" class="reasons" aria-live="polite"></ul>
+  </section>
+
+  <section id="inspector" class="card" aria-labelledby="inspector-heading" hidden>
+    <h2 id="inspector-heading">Plan inspector</h2>
+    <div class="muted"><span id="plan-context"></span></div>
+    <ul id="plan-issues" class="issues"></ul>
+    <h3>On this view</h3>
+    <table>
+      <thead><tr><th scope="col">Field</th><th scope="col">Value</th><th scope="col">Step</th></tr></thead>
+      <tbody id="plan-actions"></tbody>
+    </table>
+    <div id="plan-gates-wrap" hidden><h3>Blocking until you act on the page</h3><ul id="plan-gates" class="issues"></ul></div>
+    <div id="plan-notes-wrap" hidden><h3>Do by hand</h3><ul id="plan-notes" class="plain"></ul></div>
+    <div id="plan-deferred-wrap" hidden><h3>Waiting for a later step or screen</h3><ul id="plan-deferred" class="plain"></ul></div>
+    <p class="muted">Plan hash <code id="plan-hash"></code></p>
+  </section>
+
+  <section class="card" aria-labelledby="checklist-heading">
+    <h2 id="checklist-heading">Pre-flight checklist</h2>
+    <label class="check"><input id="check-reviewed" type="checkbox"> <span>I read every drafted field on the Facebook page.</span></label>
+    <label class="check"><input id="check-profile" type="checkbox"> <span>Profile picture uploaded on Facebook <span id="need-profile" class="muted"></span></span></label>
+    <label class="check"><input id="check-cover" type="checkbox"> <span>Cover photo uploaded on Facebook <span id="need-cover" class="muted"></span></span></label>
+  </section>
+
+  <section id="progress-card" class="card" aria-labelledby="progress-heading" hidden>
+    <h2 id="progress-heading">Progress across steps</h2>
+    <table>
+      <thead><tr><th scope="col">Field</th><th scope="col">Status</th><th scope="col">Where</th></tr></thead>
+      <tbody id="progress"></tbody>
+    </table>
+  </section>
+
+  <details class="card" id="paste-drawer">
+    <summary>Copy-paste fallback</summary>
+    <p class="muted">If a field will not take a draft, copy it here and paste it on Facebook yourself.</p>
+    <div id="paste-blocks"></div>
+  </details>
+
+  <section class="card" aria-labelledby="data-heading">
+    <h2 id="data-heading">Local data</h2>
+    <p class="muted">Packs, plans, and the checklist stay in this browser (chrome.storage.local). Nothing is synced or sent anywhere.</p>
+    <button id="clear" type="button" class="danger">Clear All Local Data</button>
+  </section>
+
   <script src="sidepanel.js"></script>
 </body>
 </html>

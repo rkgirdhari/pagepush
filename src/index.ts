@@ -1,4 +1,4 @@
-export { approve, CommitRefused, executeCommit, executeDraft } from "./execute.ts";
+export { approve, checkDrift, CommitRefused, executeCommit, executeDraft } from "./execute.ts";
 export { formatTrace } from "./debug.ts";
 export type { RunOptions, TraceEvent } from "./debug.ts";
 export { candleRunner, interpretModelOutput, pinnedModelPaths, runCandle } from "./draft/candle.ts";
