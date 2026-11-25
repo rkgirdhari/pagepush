@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Page-Push Manual-Assist Companion",
+  "version": "1.0.0",
+  "description": "Manual-assist browser extension for drafting and populating Business Page setup forms on click.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab"
+  ],
+  "action": {
+    "default_title": "Open Page-Push Companion"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.facebook.com/*",
+        "https://devpost.com/*",
+        "https://appsumo.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ]
+    }
+  ]
+}
