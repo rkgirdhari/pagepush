@@ -1,0 +1,268 @@
+import type { Control, FieldSchema, FillPlan, PlanIssue, PlatformSchema } from "../types.ts";
+import { facebookSchema } from "../schema.ts";
+import { buildPlan, type PlanDraft } from "../plan.ts";
+import { isButtonControl, labelMatches, visibleText, type Page } from "../bind.ts";
+import { asStringList, isBlank } from "../validate.ts";
+import { dedupe, getPath, issue, labelKey } from "../util.ts";
+
+export type FacebookTier = "essentials" | "standard" | "launch";
+export type MediaNeed = "required" | "optional";
+export type Weekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+export interface FacebookPack {
+  tier: FacebookTier;
+  page: {
+    name: string;
+    /** Up to three, each matching an option Facebook lists. */
+    categories: string[];
+    bio?: string;
+  };
+  contact?: {
+    website?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+    zip?: string;
+  };
+  hours?: {
+    mode: string;
+    /** Opening times per day, for the person to set by hand. Not written by the shim in v1. */
+    schedule?: Partial<Record<Weekday, string>>;
+  };
+  cta?: { type: string; url?: string };
+  launchPost?: { text: string };
+  media?: { profilePicture?: MediaNeed; coverPhoto?: MediaNeed };
+  /** Which commit actions the person wants after Approve & Commit. Defaults are filled in by prepareFacebookPack. */
+  commit?: {
+    createPage?: boolean;
+    saveChanges?: boolean;
+    saveActionButton?: boolean;
+    publishLaunchPost?: boolean;
+  };
+}
+
+interface TierRule {
+  name: string;
+  priceUsd: number;
+  promise: string;
+  fields: string[];
+}
+
+const WEEK: Weekday[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const SECRET_KEY = /^(pass(word)?|passcode|token|access[_-]?token|secret|otp|2fa|two[_-]?factor|cookie|session)$/i;
+const SECRET_VALUE = /private key|begin [a-z ]*private|EAA[A-Za-z0-9]{20,}|sk_live_|api[_ -]?key|password\s*[:=]/i;
+
+export function facebookTiers(schema: PlatformSchema = facebookSchema): Record<FacebookTier, TierRule> {
+  return (schema.rules?.tiers ?? {}) as Record<FacebookTier, TierRule>;
+}
+
+export function tierOffer(tier: FacebookTier): PlatformSchema["offer"] | null {
+  const rule = facebookTiers()[tier];
+  return rule ? { name: rule.name, priceUsd: rule.priceUsd, promise: rule.promise } : null;
+}
+
+/**
+ * Trims and dedupes the pack, fills commit defaults, and drops values the tier does not cover.
+ * Never invents a value: anything dropped is named in `issues`.
+ */
+export function prepareFacebookPack(pack: FacebookPack): { pack: FacebookPack; issues: PlanIssue[] } {
+  const issues: PlanIssue[] = [];
+  const next = structuredClone(pack);
+  const rule = facebookTiers()[next.tier];
+  if (!rule) {
+    issues.push(issue("error", "tier", "tier", `Unknown tier "${String(next.tier)}". Use essentials, standard, or launch.`));
+  }
+
+  next.page.name = (next.page.name ?? "").trim();
+  next.page.categories = dedupe((next.page.categories ?? []).map((item) => item.trim()).filter(Boolean));
+  if (next.page.bio != null) next.page.bio = next.page.bio.trim();
+  if (next.contact) {
+    for (const key of Object.keys(next.contact) as (keyof NonNullable<FacebookPack["contact"]>)[]) {
+      const value = next.contact[key];
+      if (typeof value === "string") next.contact[key] = value.trim();
+    }
+  }
+  if (next.hours) next.hours.mode = next.hours.mode.trim();
+  if (next.cta) {
+    next.cta.type = next.cta.type.trim();
+    if (next.cta.url != null) next.cta.url = next.cta.url.trim();
+  }
+  if (next.launchPost) next.launchPost.text = next.launchPost.text.trim();
+
+  next.commit = {
+    createPage: next.commit?.createPage ?? true,
+    saveChanges: next.commit?.saveChanges ?? true,
+    saveActionButton: next.commit?.saveActionButton ?? Boolean(next.cta?.type),
+    publishLaunchPost: next.commit?.publishLaunchPost ?? Boolean(next.launchPost?.text),
+  };
+
+  if (rule) {
+    for (const field of facebookSchema.fields) {
+      if (rule.fields.includes(field.id)) continue;
+      const value = getPath(next, field.path);
+      if (isBlank(value) || value === false) continue;
+      unsetPath(next as unknown as Record<string, unknown>, field.path);
+      if (field.phase === "commit") continue;
+      issues.push(issue(
+        "warning",
+        field.id,
+        "out-of-tier",
+        `${field.labels[0]} is not part of the ${rule.name.split(": ").pop()} tier and was left out.`,
+      ));
+    }
+  }
+  return { pack: next, issues };
+}
+
+/** Pack-level checks that do not need the page. Errors here block the plan. */
+export function assessFacebook(pack: FacebookPack): PlanIssue[] {
+  const issues: PlanIssue[] = [];
+  for (const path of secretPaths(pack)) {
+    issues.push(issue("error", path, "secret", `The pack holds something that looks like a credential at ${path}. Remove it; Page Push never stores sign-in details.`));
+  }
+  if (!pack.page?.name?.trim()) issues.push(issue("error", "pageName", "required", "The pack needs the Page name."));
+  const categories = asStringList(pack.page?.categories) ?? [];
+  if (!categories.length) issues.push(issue("error", "categories", "required", "The pack needs at least one Page category."));
+  const modes = (facebookSchema.rules?.hoursModes ?? []) as string[];
+  if (pack.hours && !modes.some((mode) => labelKey(mode) === labelKey(pack.hours!.mode))) {
+    issues.push(issue("error", "hoursMode", "enum", `Hours must be one of: ${modes.join(", ")}.`));
+  }
+  if (pack.hours?.schedule && labelKey(pack.hours.mode) !== labelKey("Open on selected hours")) {
+    issues.push(issue("warning", "hoursMode", "schedule-ignored", "Opening times only apply to \"Open on selected hours\"."));
+  }
+  if (pack.cta && !pack.cta.url && !/call|message|email/i.test(pack.cta.type)) {
+    issues.push(issue("warning", "ctaUrl", "cta-url", `The "${pack.cta.type}" button usually needs a link.`));
+  }
+  return issues;
+}
+
+/**
+ * Plans the Facebook view that is open. `pageUrl` is required: the guard reads it to tell
+ * the Page creation view from an existing Page, and refuses anything off facebook.com.
+ */
+export function planFacebook(doc: Document, pack: FacebookPack, pageUrl: string): FillPlan {
+  const prepared = prepareFacebookPack(pack);
+  const offer = tierOffer(prepared.pack.tier) ?? undefined;
+  return buildPlan({
+    schema: facebookSchema,
+    document: doc,
+    pack: prepared.pack as unknown as Record<string, unknown>,
+    pageUrl,
+    offer,
+    extraIssues: [...prepared.issues, ...assessFacebook(pack)],
+    guard: (page) => guardFacebook(page, prepared.pack, pageUrl),
+    onUnmapped: (control, draft) => onFacebookUnmapped(control, draft),
+    after: (draft) => facebookAfter(draft, prepared.pack),
+  });
+}
+
+export function facebookContext(pageUrl: string): "create" | "page" | "off-site" {
+  let url: URL;
+  try {
+    url = new URL(pageUrl);
+  } catch {
+    return "off-site";
+  }
+  const host = url.hostname.toLowerCase();
+  if (url.protocol !== "https:" || !(host === "facebook.com" || host.endsWith(".facebook.com"))) return "off-site";
+  const createPaths = (facebookSchema.rules?.createPaths ?? []) as string[];
+  return createPaths.some((path) => url.pathname === path || url.pathname.startsWith(`${path}/`)) ? "create" : "page";
+}
+
+/**
+ * Business-Page-only guardrail. Outside the creation view the open page must name the pack's Page
+ * in a heading and show at least one Page-admin signal; otherwise nothing is planned. This fails
+ * closed: a personal profile or timeline gets a refusal, not a draft.
+ */
+function guardFacebook(page: Page, pack: FacebookPack, pageUrl: string): PlanIssue[] {
+  const context = facebookContext(pageUrl);
+  if (context === "off-site") {
+    return [issue("error", "page", "not-facebook", "Open the Facebook Business Page view in this tab. Page Push only runs on https://facebook.com.")];
+  }
+  if (context === "create") return [];
+  const doc = page.document;
+  const name = labelKey(pack.page?.name ?? "");
+  const headings = Array.from(doc.querySelectorAll("h1, h2, [role='heading']"));
+  const named = name !== "" && headings.some((heading) => labelKey(heading.textContent ?? "") === name);
+  if (!named) {
+    return [issue(
+      "error",
+      "page",
+      "page-identity",
+      `This view does not show the Page "${pack.page?.name ?? ""}". Switch into that Business Page, open its settings or composer, and plan again.`,
+    )];
+  }
+  const signals = ((facebookSchema.rules?.pageSignals ?? []) as string[]).map((signal) => labelKey(signal));
+  const signalNodes = doc.querySelectorAll(
+    "a, button, [role='button'], [role='link'], [role='tab'], [role='menuitem'], h1, h2, h3, [role='heading']",
+  );
+  const admin = Array.from(signalNodes).some((node) => {
+    const texts = [visibleText(node), node.getAttribute("aria-label") ?? ""];
+    return texts.some((text) => text && signals.includes(labelKey(text)));
+  });
+  if (!admin) {
+    return [issue(
+      "error",
+      "page",
+      "not-business-page",
+      "This looks like a personal profile or a Page you are not managing. Page Push only fills Business Pages you administer.",
+    )];
+  }
+  return [];
+}
+
+function facebookAfter(draft: PlanDraft, pack: FacebookPack): void {
+  for (const id of ["profilePicture", "coverPhoto"] as const) {
+    if (pack.media?.[id] !== "required") continue;
+    const field = facebookSchema.fields.find((item) => item.id === id)!;
+    const control = fileControl(draft.page.controls, field);
+    if (!control) continue;
+    draft.notes = draft.notes.filter((note) => !note.startsWith(`${field.labels[0]}:`));
+    draft.gates.push({
+      code: "file",
+      fieldId: id,
+      controlId: control.id,
+      message: `Attach the ${id === "profilePicture" ? "profile picture" : "cover photo"} yourself before commit.`,
+    });
+  }
+
+  const hoursPlanned = draft.actions.some((action) => action.id === "hoursMode");
+  const schedule = pack.hours?.schedule;
+  if (hoursPlanned && schedule && labelKey(pack.hours!.mode) === labelKey("Open on selected hours")) {
+    const days = WEEK.filter((day) => schedule[day]?.trim()).map((day) => `${day.slice(0, 3)} ${schedule[day]!.trim()}`);
+    if (days.length) draft.notes.push(`Opening times: set by hand (${days.join(", ")})`);
+  }
+}
+
+function onFacebookUnmapped(control: Control, draft: PlanDraft): void {
+  if (control.disabled || isButtonControl(control) || !control.required) return;
+  const prompt = control.rawLabels[0];
+  if (!prompt) return;
+  draft.warnings.push(issue("warning", `custom:${labelKey(prompt)}`, "unmapped", `Left "${prompt}" alone. Fill it yourself if Facebook asks for it.`));
+}
+
+function fileControl(controls: Control[], field: FieldSchema): Control | undefined {
+  return controls.find((control) => control.type === "file" && labelMatches(control, field.labels, "exact"));
+}
+
+function secretPaths(value: unknown, path = ""): string[] {
+  if (typeof value === "string") return SECRET_VALUE.test(value) ? [path || "pack"] : [];
+  if (Array.isArray(value)) return value.flatMap((item, index) => secretPaths(item, `${path}[${index}]`));
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, item]) => {
+    const next = path ? `${path}.${key}` : key;
+    return SECRET_KEY.test(key) ? [next] : secretPaths(item, next);
+  });
+}
+
+function unsetPath(root: Record<string, unknown>, path: string): void {
+  const keys = path.split(".");
+  const last = keys.pop();
+  let current: unknown = root;
+  for (const key of keys) {
+    if (current == null || typeof current !== "object") return;
+    current = (current as Record<string, unknown>)[key];
+  }
+  if (last && current && typeof current === "object") delete (current as Record<string, unknown>)[last];
+}

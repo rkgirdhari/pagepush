@@ -1,0 +1,239 @@
+{
+  "id": "facebook",
+  "version": "2026-11-24",
+  "title": "Facebook Business Page setup",
+  "offer": {
+    "name": "Facebook Business Page Setup Sprint",
+    "priceUsd": 15,
+    "promise": "Your Business Page details, drafted into the Facebook setup and settings forms you already have open. You read the plan in the side panel and click Approve & Commit before anything is created, saved, or posted."
+  },
+  "sources": [
+    {
+      "title": "Facebook Help Center",
+      "url": "https://www.facebook.com/help/"
+    },
+    {
+      "title": "Meta Business Help Center",
+      "url": "https://www.facebook.com/business/help"
+    }
+  ],
+  "rules": {
+    "status": "Labels, limits, and page signals are informed guesses until Phase 5 locks them against sanitized captures of the logged-in Page creation and settings views. Phase 5 also replaces these help-center roots with the specific articles the limits come from.",
+    "binding": "Controls are found by visible label, aria-label, or placeholder. Facebook does not publish input names and its class names change, so the shim never depends on either.",
+    "scope": "Business Pages only. Outside the Page creation view, the page must show the pack's Page name as a heading and at least one Page-admin signal, or the plan refuses with no actions.",
+    "commit": "Create Page, Save, the action-button Save, and Post are commit actions. They run only after Approve & Commit for this exact plan hash.",
+    "media": "Profile picture and cover photo are attached by the person. The shim tracks them as a checklist and, when the pack marks one required, blocks commit until the file input has a file.",
+    "secrets": "Packs never carry passwords, two-factor codes, or access tokens. A sign-in page is refused.",
+    "pageSignals": [
+      "Professional dashboard",
+      "Meta Business Suite",
+      "Edit Page",
+      "Page settings",
+      "Ad Center",
+      "Boost post",
+      "Switch into Page",
+      "Insights"
+    ],
+    "createPaths": ["/pages/create", "/pages/creation"],
+    "hoursModes": ["No hours available", "Always open", "Open on selected hours"],
+    "tiers": {
+      "essentials": {
+        "name": "Facebook Business Page Setup Sprint: Essentials",
+        "priceUsd": 5,
+        "promise": "Page name, category, bio, and the main contact details, drafted into the Page form you have open. Nothing is created or saved until you click Approve & Commit.",
+        "fields": ["pageName", "categories", "bio", "website", "phone", "email", "profilePicture", "coverPhoto", "createPage", "saveChanges"]
+      },
+      "standard": {
+        "name": "Facebook Business Page Setup Sprint: Standard Business",
+        "priceUsd": 15,
+        "promise": "Everything in Essentials plus address, hours, and the action button, drafted into the Page forms you have open. Nothing is saved until you click Approve & Commit.",
+        "fields": ["pageName", "categories", "bio", "website", "phone", "email", "address", "city", "zip", "hoursMode", "ctaType", "ctaUrl", "ctaSave", "profilePicture", "coverPhoto", "createPage", "saveChanges"]
+      },
+      "launch": {
+        "name": "Facebook Business Page Setup Sprint: Full Launch + Post",
+        "priceUsd": 50,
+        "promise": "Everything in Standard Business plus a launch post drafted into the Page composer. Nothing is saved or posted until you click Approve & Commit.",
+        "fields": ["pageName", "categories", "bio", "website", "phone", "email", "address", "city", "zip", "hoursMode", "ctaType", "ctaUrl", "ctaSave", "launchPost", "publishPost", "profilePicture", "coverPhoto", "createPage", "saveChanges"]
+      }
+    }
+  },
+  "fields": [
+    {
+      "id": "pageName",
+      "labels": ["Page name", "Page name (required)", "Name of your Page"],
+      "path": "page.name",
+      "control": "text",
+      "required": true,
+      "maxLength": 75,
+      "step": "create",
+      "phase": "draft",
+      "notes": "Unverified limit. Facebook reviews name changes on existing Pages."
+    },
+    {
+      "id": "categories",
+      "labels": ["Category", "Categories", "Category (required)"],
+      "path": "page.categories",
+      "control": "tokens",
+      "taxonomy": true,
+      "required": true,
+      "minItems": 1,
+      "maxItems": 3,
+      "step": "create",
+      "phase": "draft",
+      "notes": "Typeahead. Each value must be an option Facebook lists; the shim clicks it and never invents one."
+    },
+    {
+      "id": "bio",
+      "labels": ["Bio", "Bio (optional)", "Intro"],
+      "path": "page.bio",
+      "control": "textarea",
+      "maxLength": 101,
+      "step": "create",
+      "phase": "draft",
+      "notes": "Unverified limit; tightened when the live control's maxlength is lower."
+    },
+    {
+      "id": "website",
+      "labels": ["Website", "Website URL"],
+      "path": "contact.website",
+      "control": "url",
+      "format": "url",
+      "step": "contact",
+      "phase": "draft"
+    },
+    {
+      "id": "phone",
+      "labels": ["Phone number", "Phone"],
+      "path": "contact.phone",
+      "control": "text",
+      "pattern": "^\\+?[0-9][0-9 ().-]{5,22}$",
+      "step": "contact",
+      "phase": "draft"
+    },
+    {
+      "id": "email",
+      "labels": ["Email", "Email address"],
+      "path": "contact.email",
+      "control": "email",
+      "format": "email",
+      "step": "contact",
+      "phase": "draft"
+    },
+    {
+      "id": "address",
+      "labels": ["Address", "Street address"],
+      "path": "contact.address",
+      "control": "text",
+      "maxLength": 200,
+      "step": "location",
+      "phase": "draft"
+    },
+    {
+      "id": "city",
+      "labels": ["City/Town", "City"],
+      "path": "contact.city",
+      "control": "text",
+      "step": "location",
+      "phase": "draft"
+    },
+    {
+      "id": "zip",
+      "labels": ["ZIP code", "Postal code", "ZIP"],
+      "path": "contact.zip",
+      "control": "text",
+      "maxLength": 12,
+      "step": "location",
+      "phase": "draft"
+    },
+    {
+      "id": "hoursMode",
+      "labels": ["Hours", "Business hours"],
+      "path": "hours.mode",
+      "control": "choice",
+      "step": "hours",
+      "phase": "draft",
+      "notes": "Radio group. Per-day opening times stay manual in v1 and are listed in the preview."
+    },
+    {
+      "id": "ctaType",
+      "labels": ["Choose a button", "Which button do you want people to see?"],
+      "within": ["Add action button", "Edit action button", "Add button"],
+      "path": "cta.type",
+      "control": "choice",
+      "step": "cta",
+      "phase": "draft"
+    },
+    {
+      "id": "ctaUrl",
+      "labels": ["Website", "Website URL", "Link"],
+      "within": ["Add action button", "Edit action button", "Add button"],
+      "path": "cta.url",
+      "control": "url",
+      "format": "url",
+      "step": "cta",
+      "phase": "draft"
+    },
+    {
+      "id": "ctaSave",
+      "labels": ["Save"],
+      "within": ["Add action button", "Edit action button", "Add button"],
+      "path": "commit.saveActionButton",
+      "control": "button",
+      "step": "cta",
+      "phase": "commit"
+    },
+    {
+      "id": "launchPost",
+      "labels": ["What's on your mind?", "Create a public post…", "Write something..."],
+      "within": ["Create post"],
+      "path": "launchPost.text",
+      "control": "textarea",
+      "maxLength": 63206,
+      "step": "post",
+      "phase": "draft",
+      "notes": "Lexical composer. Written through the browser input pipeline, never by setting DOM text."
+    },
+    {
+      "id": "publishPost",
+      "labels": ["Post"],
+      "within": ["Create post"],
+      "path": "commit.publishLaunchPost",
+      "control": "button",
+      "step": "post",
+      "phase": "commit"
+    },
+    {
+      "id": "profilePicture",
+      "labels": ["Add profile picture", "Profile picture"],
+      "path": "media.profilePicture",
+      "control": "file",
+      "step": "customize",
+      "phase": "draft"
+    },
+    {
+      "id": "coverPhoto",
+      "labels": ["Add cover photo", "Cover photo"],
+      "path": "media.coverPhoto",
+      "control": "file",
+      "step": "customize",
+      "phase": "draft"
+    },
+    {
+      "id": "createPage",
+      "labels": ["Create Page"],
+      "path": "commit.createPage",
+      "control": "button",
+      "step": "create",
+      "phase": "commit"
+    },
+    {
+      "id": "saveChanges",
+      "labels": ["Save", "Save changes"],
+      "path": "commit.saveChanges",
+      "control": "button",
+      "pick": "last",
+      "step": "contact",
+      "phase": "commit"
+    }
+  ]
+}

@@ -8,7 +8,8 @@ export interface Page {
   password: boolean;
 }
 
-const CONTROL_SELECTOR = "input, textarea, select, button, [contenteditable='true'], [role='combobox']";
+const CONTROL_SELECTOR = "input, textarea, select, button, [role='button'], [contenteditable='true'], [role='combobox']";
+const CAPTCHA_RESPONSES = ["g-recaptcha-response", "h-captcha-response", "cf-turnstile-response"];
 
 export function bindPage(doc: Document): Page {
   const controls: Control[] = [];
@@ -18,7 +19,7 @@ export function bindPage(doc: Document): Page {
     const type = (el.getAttribute("type") ?? "").toLowerCase();
     const name = el.getAttribute("name") ?? "";
     if (type === "hidden") return;
-    if (name === "g-recaptcha-response" || name === "h-captcha-response") return;
+    if (CAPTCHA_RESPONSES.includes(name)) return;
     if (!el.id) {
       generated += 1;
       el.id = `pp-${generated}`;
@@ -50,14 +51,22 @@ export function bindPage(doc: Document): Page {
 export function captchaPresent(doc: Document): boolean {
   return Boolean(
     doc.querySelector(
-      ".g-recaptcha, iframe[src*='recaptcha'], iframe[src*='hcaptcha'], [data-sitekey], textarea[name='g-recaptcha-response'], textarea[name='h-captcha-response']",
+      [
+        ".g-recaptcha",
+        "iframe[src*='recaptcha']",
+        "iframe[src*='hcaptcha']",
+        ".cf-turnstile",
+        "iframe[src*='challenges.cloudflare.com']",
+        "[data-sitekey]",
+        ...CAPTCHA_RESPONSES.map((name) => `[name='${name}']`),
+      ].join(", "),
     ),
   );
 }
 
 export function captchaCleared(doc: Document): boolean {
   if (!captchaPresent(doc)) return true;
-  const boxes = doc.querySelectorAll("textarea[name='g-recaptcha-response'], textarea[name='h-captcha-response']");
+  const boxes = doc.querySelectorAll(CAPTCHA_RESPONSES.map((name) => `[name='${name}']`).join(", "));
   for (const box of boxes) {
     const value = "value" in box ? String((box as HTMLTextAreaElement).value) : "";
     if (value.trim()) return true;
@@ -80,9 +89,18 @@ export function visibleText(el: Element): string {
   return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
 }
 
+/** A native button or an ARIA button (Facebook renders most buttons as div[role=button]). */
+export function isButtonControl(control: Pick<Control, "tag" | "role">): boolean {
+  return control.tag === "BUTTON" || control.role === "button";
+}
+
 function readRawLabels(doc: Document, el: Element): string[] {
   if (el.tagName === "BUTTON") {
     const text = visibleText(el);
+    return text ? [text] : [];
+  }
+  if (el.getAttribute("role") === "button") {
+    const text = visibleText(el) || (el.getAttribute("aria-label") ?? "").trim();
     return text ? [text] : [];
   }
   const raw: string[] = [];
@@ -102,7 +120,12 @@ function readRawLabels(doc: Document, el: Element): string[] {
       if (node) raw.push((node.textContent ?? "").replace(/\s+/g, " ").trim());
     }
   }
-  return raw.filter(Boolean);
+  const found = raw.filter(Boolean);
+  if (!found.length) {
+    const placeholder = (el.getAttribute("placeholder") ?? "").trim();
+    if (placeholder) found.push(placeholder);
+  }
+  return found;
 }
 
 function isRequired(el: Element, rawLabels: string[]): boolean {
@@ -144,8 +167,28 @@ export function checkboxesByLabel(root: ParentNode, label: string): Element[] {
 
 export function radiosIn(root: ParentNode): Element[] {
   const found: Element[] = [];
-  root.querySelectorAll("input[type='radio']").forEach((node) => found.push(node as Element));
+  root.querySelectorAll("input[type='radio'], [role='radio']").forEach((node) => found.push(node as Element));
   return found;
+}
+
+/** The text a person reads next to a radio option. */
+export function radioText(radio: Element): string {
+  const wrapping = radio.closest("label");
+  if (wrapping) return visibleText(wrapping);
+  const aria = radio.getAttribute("aria-label");
+  if (aria) return aria.trim();
+  const doc = radio.ownerDocument;
+  if (radio.id && doc) {
+    for (const label of doc.querySelectorAll("label")) {
+      if (label.getAttribute("for") === radio.id) return visibleText(label);
+    }
+  }
+  return (radio.textContent ?? "").replace(/s+/g, " ").trim();
+}
+
+export function radioChecked(radio: Element): boolean {
+  if (radio.getAttribute("role") === "radio") return radio.getAttribute("aria-checked") === "true";
+  return (radio as HTMLInputElement).checked === true;
 }
 
 function controlsByLabel(
@@ -168,16 +211,21 @@ function controlsByLabel(
   return found;
 }
 
-export function findSection(doc: Document, names: string[]): Element | null {
+const SECTION_SELECTOR = "section, fieldset, [role='group'], [role='dialog'], [role='radiogroup'], [role='region']";
+
+/** The first section named by any of `names`, optionally only inside `within`. */
+export function findSection(doc: Document, names: string[], within?: Element): Element | null {
   const wanted = names.map((name) => labelKey(name));
-  const candidates = doc.querySelectorAll("section, fieldset, [role='group']");
-  for (const el of candidates) {
+  const inside = (el: Element): boolean => !within || (within !== el && within.contains(el));
+  for (const el of doc.querySelectorAll(SECTION_SELECTOR)) {
+    if (!inside(el)) continue;
     const texts = sectionTexts(doc, el);
     if (texts.some((text) => wanted.includes(labelKey(text)))) return el;
   }
   for (const heading of doc.querySelectorAll("h1, h2, h3, legend")) {
     if (!wanted.includes(labelKey(heading.textContent ?? ""))) continue;
-    return heading.closest("section, fieldset") ?? heading.parentElement;
+    const section = heading.closest(SECTION_SELECTOR) ?? heading.parentElement;
+    if (section && inside(section)) return section;
   }
   return null;
 }

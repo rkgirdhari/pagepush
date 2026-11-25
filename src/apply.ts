@@ -6,6 +6,8 @@ import {
   ensureCount,
   inputsByLabel,
   locate,
+  radioChecked,
+  radioText,
   radiosIn,
   rowOf,
   visibleText,
@@ -33,6 +35,8 @@ export function writeAction(doc: Document, action: Action): boolean {
       return writeCheck(doc, action);
     case "button":
       return writeButton(doc, action);
+    case "choice":
+      return writeChoice(doc, action);
     case "invites":
       return writeInvites(doc, action);
     case "pricing":
@@ -62,6 +66,8 @@ export function matchesAction(doc: Document, action: Action): boolean {
       return linesMatch(doc, action);
     case "select":
       return selectMatches(doc, action);
+    case "choice":
+      return choiceMatches(doc, action);
     case "pricing":
       return pricingMatches(doc, action);
     case "features":
@@ -176,6 +182,34 @@ function writeCheck(doc: Document, action: Action): boolean {
   if (!el) return false;
   setChecked(el, true);
   return (el as HTMLInputElement).checked === true;
+}
+
+function writeChoice(doc: Document, action: Action): boolean {
+  const group = locate(doc, action.controlId);
+  if (!group || typeof action.value !== "string") return false;
+  const radio = radiosIn(group).find((candidate) => radioIs(candidate, action.value as string));
+  if (!radio) return false;
+  if (!radioChecked(radio)) activate(radio);
+  return choiceMatches(doc, action);
+}
+
+function choiceMatches(doc: Document, action: Action): boolean {
+  const group = locate(doc, action.controlId);
+  if (!group || typeof action.value !== "string") return false;
+  const selected = radiosIn(group).filter((radio) => radioChecked(radio));
+  return selected.length === 1 && radioIs(selected[0]!, action.value);
+}
+
+function radioIs(radio: Element, value: string): boolean {
+  const want = labelKey(value);
+  return labelKey(radioText(radio)) === want || labelKey(radio.getAttribute("value") ?? "") === want;
+}
+
+/** A real activation: native .click() runs the browser's default action, so React sees the change. */
+function activate(el: Element): void {
+  const clickable = el as Element & { click?: () => void };
+  if (typeof clickable.click === "function") clickable.click();
+  else clickElement(el);
 }
 
 function writeButton(doc: Document, action: Action): boolean {
@@ -371,8 +405,7 @@ function scope(doc: Document, action: Action): Element {
 
 function setValue(el: Element, value: string): void {
   if (el.getAttribute("contenteditable") === "true") {
-    el.textContent = value;
-    dispatch(el, "input");
+    setRichText(el, value);
     return;
   }
   const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value");
@@ -389,8 +422,132 @@ function setChecked(el: Element, checked: boolean): void {
 }
 
 function readValue(el: Element): string {
-  if (el.getAttribute("contenteditable") === "true") return el.textContent ?? "";
+  if (el.getAttribute("contenteditable") === "true") return readRichText(el);
   return String((el as HTMLInputElement).value ?? "");
+}
+
+/**
+ * Rich-text editors (Facebook's Lexical composer above all) keep their own state and only
+ * accept text that arrives through the browser's input pipeline. Setting DOM text directly
+ * desyncs that state and the text is lost on the next render or on submit.
+ *
+ * One delivery path is used, never two, so an editor that applies text asynchronously is
+ * not handed the same text twice:
+ *   1. execCommand("insertText"), the native pipeline (fires trusted beforeinput/input);
+ *   2. otherwise a cancelable beforeinput (insertText) that the editor handles itself;
+ *   3. otherwise a paste event carrying text/plain;
+ *   4. otherwise, only for a plain contenteditable that is not a Lexical root, DOM text plus input.
+ * A Lexical editor that took none of these is left untouched, so readback fails and the field
+ * is reported unconfirmed instead of silently holding text the editor never registered.
+ */
+function setRichText(el: Element, value: string): void {
+  const doc = el.ownerDocument;
+  if (!doc) return;
+  focusAndSelectAll(el);
+  if (deliverByExecCommand(doc, el, value)) return;
+  if (!dispatchInputEvent(el, "beforeinput", value)) {
+    dispatchInputEvent(el, "input", value);
+    return;
+  }
+  if (dispatchPaste(el, value)) return;
+  if (isLexical(el)) return;
+  el.textContent = value;
+  dispatchInputEvent(el, "input", value);
+}
+
+function isLexical(el: Element): boolean {
+  return el.closest("[data-lexical-editor='true']") != null;
+}
+
+function focusAndSelectAll(el: Element): void {
+  (el as HTMLElement).focus?.();
+  const view = el.ownerDocument?.defaultView;
+  const selection = view?.getSelection?.();
+  const doc = el.ownerDocument;
+  if (!selection || !doc?.createRange) return;
+  const range = doc.createRange();
+  range.selectNodeContents(el);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+/** True when the native pipeline reached the editor (any input event fired during the command). */
+function deliverByExecCommand(doc: Document, el: Element, value: string): boolean {
+  const exec = (doc as Document & { execCommand?: (command: string, ui: boolean, value: string) => boolean }).execCommand;
+  if (typeof exec !== "function") return false;
+  let reached = false;
+  const seen = (): void => { reached = true; };
+  el.addEventListener("beforeinput", seen);
+  el.addEventListener("input", seen);
+  let ok = false;
+  try {
+    ok = exec.call(doc, "insertText", false, value) === true;
+  } catch {
+    ok = false;
+  } finally {
+    el.removeEventListener("beforeinput", seen);
+    el.removeEventListener("input", seen);
+  }
+  return ok && reached;
+}
+
+/** Dispatches an InputEvent. Returns false when a handler cancelled it (the editor took the text). */
+function dispatchInputEvent(el: Element, type: "beforeinput" | "input", data: string): boolean {
+  const view = el.ownerDocument?.defaultView;
+  const InputCtor = (view as { InputEvent?: typeof InputEvent } | null | undefined)?.InputEvent;
+  const init = { bubbles: true, cancelable: type === "beforeinput", inputType: "insertText", data };
+  let event: Event;
+  if (typeof InputCtor === "function") {
+    event = new InputCtor(type, init);
+  } else {
+    const EventCtor = view?.Event ?? Event;
+    event = new EventCtor(type, init);
+    Object.defineProperty(event, "inputType", { value: init.inputType });
+    Object.defineProperty(event, "data", { value: data });
+  }
+  return el.dispatchEvent(event);
+}
+
+/** Returns true when a handler cancelled the paste (the editor inserted the text itself). */
+function dispatchPaste(el: Element, text: string): boolean {
+  const view = el.ownerDocument?.defaultView as
+    | (Window & { DataTransfer?: typeof DataTransfer; ClipboardEvent?: typeof ClipboardEvent })
+    | null;
+  if (!view || typeof view.DataTransfer !== "function" || typeof view.ClipboardEvent !== "function") return false;
+  try {
+    const data = new view.DataTransfer();
+    data.setData("text/plain", text);
+    const event = new view.ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+    return !el.dispatchEvent(event);
+  } catch {
+    return false;
+  }
+}
+
+const BLOCK = /^(P|DIV|H[1-6]|LI|BLOCKQUOTE|PRE)$/;
+
+/** Text as the person sees it: paragraphs and <br> become line breaks. */
+function readRichText(el: Element): string {
+  let out = "";
+  const walk = (node: Node): void => {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        out += child.nodeValue ?? "";
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      const tag = (child as Element).tagName;
+      if (tag === "BR") {
+        out += "\n";
+        continue;
+      }
+      const block = BLOCK.test(tag);
+      if (block && out && !out.endsWith("\n")) out += "\n";
+      walk(child);
+    }
+  };
+  walk(el);
+  return out.replace(/\n+$/, "");
 }
 
 function dispatch(el: Element, type: string): void {

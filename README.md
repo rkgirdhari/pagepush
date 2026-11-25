@@ -22,6 +22,9 @@ Files the browser will not accept from a script (thumbnails, the AppSumo hero, s
 | `examples/` | A Northline pack for each platform |
 | `src/shims/devpost.ts` | Plan a page, or a sprint across several open hackathon pages |
 | `src/shims/appsumo.ts` | Plan the partner editor, plus `renderListingPaste` when the editor is not open |
+| `schemas/schema_facebook.json` | Business Page field map, the $5 / $15 / $50 tiers, and Page-admin signals (labels unverified until Phase 5) |
+| `src/shims/facebook.ts` | Plan a Business Page creation or settings view; refuses personal profiles and other Pages |
+| `docs/research/facebook-dom.md` | How Facebook's Lexical composer and React inputs accept text |
 | `src/plan.ts` | Label binding, limits, and the plan hash |
 | `src/execute.ts` | Draft, phone confirm, commit |
 

@@ -7,7 +7,16 @@ export { draftCopy } from "./draft/copy.ts";
 export type { CopyField, CopyRunner, DraftInput, DraftOutcome, ModelResult } from "./draft/copy.ts";
 export { recoverListing, renderDevpostPaste } from "./recover.ts";
 export { captchaCleared } from "./bind.ts";
-export { appsumoSchema, devpostSchema } from "./schema.ts";
+export { appsumoSchema, devpostSchema, facebookSchema } from "./schema.ts";
+export {
+  assessFacebook,
+  facebookContext,
+  facebookTiers,
+  planFacebook,
+  prepareFacebookPack,
+  tierOffer,
+} from "./shims/facebook.ts";
+export type { FacebookPack, FacebookTier, MediaNeed, Weekday } from "./shims/facebook.ts";
 export {
   planDevpost,
   planDevpostSprint,

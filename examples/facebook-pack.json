@@ -1,0 +1,30 @@
+{
+  "tier": "launch",
+  "page": {
+    "name": "Northline Studio",
+    "categories": ["Software Company", "Consulting Agency"],
+    "bio": "Retainer-hour tracking for small agencies. Clients see the burn before the month ends."
+  },
+  "contact": {
+    "website": "https://northline.example",
+    "phone": "+1 503 555 0142",
+    "email": "hello@northline.example",
+    "address": "211 SE Ankeny St",
+    "city": "Portland, Oregon",
+    "zip": "97214"
+  },
+  "hours": {
+    "mode": "Always open"
+  },
+  "cta": {
+    "type": "Book now",
+    "url": "https://northline.example/book"
+  },
+  "launchPost": {
+    "text": "Northline Studio is open.\n\nWe help small agencies track retainer hours so clients see the burn before the month ends. Book a walkthrough at https://northline.example/book"
+  },
+  "media": {
+    "profilePicture": "optional",
+    "coverPhoto": "optional"
+  }
+}

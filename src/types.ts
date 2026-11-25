@@ -13,6 +13,7 @@ export type ControlKind =
   | "lines"
   | "file"
   | "button"
+  | "choice"
   | "pricing"
   | "features"
   | "faq"
@@ -45,6 +46,11 @@ export interface FieldSchema {
   notes?: string;
   /** A token must be one of the options already on the page. */
   taxonomy?: boolean;
+  /**
+   * Section names (dialog, region, fieldset, or radio group) the control must sit inside.
+   * Controls inside such a section are not offered to fields that do not name it.
+   */
+  within?: string[];
 }
 
 export interface PlatformSchema {

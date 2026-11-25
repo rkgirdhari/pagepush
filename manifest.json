@@ -1,15 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "Page-Push Manual-Assist Companion",
+  "name": "Page Push",
+  "short_name": "Page Push",
   "version": "1.0.0",
-  "description": "Manual-assist browser extension for drafting and populating Business Page setup forms on click.",
+  "description": "Manual-assist form fill for Facebook Business Page setup. You review every draft and approve before anything is saved or posted.",
   "permissions": [
     "sidePanel",
-    "storage",
-    "activeTab"
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.facebook.com/*"
   ],
   "action": {
-    "default_title": "Open Page-Push Companion",
+    "default_title": "Open Page Push",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -26,13 +29,12 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.facebook.com/*",
-        "https://devpost.com/*",
-        "https://appsumo.com/*"
+        "https://*.facebook.com/*"
       ],
       "js": [
         "src/content.js"
-      ]
+      ],
+      "run_at": "document_idle"
     }
   ],
   "icons": {

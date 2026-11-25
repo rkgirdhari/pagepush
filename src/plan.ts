@@ -1,5 +1,14 @@
 import type { Action, Control, FieldSchema, FillPlan, PlanIssue, PlatformSchema } from "./types.ts";
-import { bindPage, ensureId, findSection, labelMatches, type Page } from "./bind.ts";
+import {
+  bindPage,
+  ensureId,
+  findSection,
+  isButtonControl,
+  labelMatches,
+  radioText,
+  radiosIn,
+  type Page,
+} from "./bind.ts";
 import { asStringList, effectiveMax, isBlank, validateField } from "./validate.ts";
 import { clip, getPath, issue, labelKey, sha256 } from "./util.ts";
 
@@ -14,6 +23,10 @@ export interface PlanDraft {
   deferred: string[];
   notes: string[];
   matched: Set<string>;
+  /** Section each `within` field resolved to, or null when it is not on this page. */
+  scopes: Map<string, Element | null>;
+  /** Sections claimed by `within` fields. Other fields do not bind inside them. */
+  fences: Element[];
 }
 
 interface BuildInput {
@@ -22,6 +35,10 @@ interface BuildInput {
   pack: Record<string, unknown>;
   pageUrl: string;
   extraIssues?: PlanIssue[];
+  /** Overrides the schema offer (a service tier). It is part of the plan hash. */
+  offer?: PlatformSchema["offer"];
+  /** Errors returned here refuse the page: the plan carries them and no actions. */
+  guard?: (page: Page) => PlanIssue[];
   onUnmapped?: (control: Control, draft: PlanDraft) => void;
   after?: (draft: PlanDraft) => void;
 }
@@ -38,6 +55,8 @@ export function buildPlan(input: BuildInput): FillPlan {
     deferred: [],
     notes: [],
     matched: new Set<string>(),
+    scopes: new Map<string, Element | null>(),
+    fences: [],
   };
   for (const item of input.extraIssues ?? []) {
     if (item.level === "error") draft.errors.push(item);
@@ -48,6 +67,11 @@ export function buildPlan(input: BuildInput): FillPlan {
     draft.errors.push(issue("error", "page", "sign-in", "Sign in yourself, then run the shim on the open submission form."));
     return finish(input, draft);
   }
+  const refusals = (input.guard?.(draft.page) ?? []).filter((item) => item.level === "error");
+  if (refusals.length) {
+    draft.errors.push(...refusals);
+    return finish(input, draft);
+  }
   if (draft.page.captcha) {
     draft.gates.push({
       code: "captcha",
@@ -55,10 +79,11 @@ export function buildPlan(input: BuildInput): FillPlan {
     });
   }
 
+  resolveScopes(draft);
   for (const field of input.schema.fields) planField(draft, field);
   for (const control of draft.page.controls) {
     if (draft.matched.has(control.id)) continue;
-    if (control.tag === "BUTTON" || control.type === "hidden") continue;
+    if (isButtonControl(control) || control.type === "hidden") continue;
     if (control.type === "radio" && !control.required) continue;
     input.onUnmapped?.(control, draft);
   }
@@ -75,7 +100,11 @@ function planField(draft: PlanDraft, field: FieldSchema): void {
     planFile(draft, field);
     return;
   }
-  const control = findControl(draft.page, field);
+  if (field.control === "choice") {
+    planChoice(draft, field);
+    return;
+  }
+  const control = findControl(draft, field);
   if (!control) {
     draft.deferred.push(field.id);
     return;
@@ -171,8 +200,54 @@ function planInvites(draft: PlanDraft, field: FieldSchema, control: Control): vo
   }));
 }
 
+function planChoice(draft: PlanDraft, field: FieldSchema): void {
+  const scope = scopeOf(draft, field);
+  if (scope === null) {
+    draft.deferred.push(field.id);
+    return;
+  }
+  const group = findSection(draft.page.document, field.labels, scope);
+  const radios = group ? radiosIn(group) : [];
+  if (!group || !radios.length) {
+    draft.deferred.push(field.id);
+    return;
+  }
+  const groupId = ensureId(group, `pp-${field.id}`);
+  claim(draft, group);
+  const value = getPath(draft.pack, field.path);
+  if (isBlank(value)) {
+    if (field.required) draft.errors.push(issue("error", field.id, "required", `${field.labels[0]} is required on this page.`));
+    return;
+  }
+  if (typeof value !== "string") {
+    draft.errors.push(issue("error", field.id, "type", `${field.labels[0]} must be one option, as text.`));
+    return;
+  }
+  const wanted = value.trim();
+  const problems = validateField(field, wanted);
+  problems.forEach((problem) => (problem.level === "error" ? draft.errors : draft.warnings).push(problem));
+  if (problems.some((problem) => problem.level === "error")) return;
+  const offered = radios.some((radio) =>
+    labelKey(radioText(radio)) === labelKey(wanted) || labelKey(radio.getAttribute("value") ?? "") === labelKey(wanted),
+  );
+  if (!offered) {
+    draft.errors.push(issue("error", field.id, "option-miss", `${field.labels[0]} has no option for ${wanted}.`));
+    return;
+  }
+  if (blocked(draft, field.id)) return;
+  draft.actions.push(action({
+    id: field.id,
+    phase: field.phase === "commit" ? "commit" : "draft",
+    kind: "choice",
+    label: field.labels[0] ?? field.id,
+    controlId: groupId,
+    sectionId: groupId,
+    value: wanted,
+  }));
+}
+
 function planFile(draft: PlanDraft, field: FieldSchema): void {
-  const control = findControl(draft.page, field);
+  const control = findControl(draft, field);
   if (!control) {
     draft.deferred.push(field.id);
     return;
@@ -257,6 +332,7 @@ function planSection(draft: PlanDraft, field: FieldSchema): void {
 function finish(input: BuildInput, draft: PlanDraft): FillPlan {
   const preview = [...draft.actions.map((item) => item.preview), ...draft.notes];
   const planHash = sha256({
+    ...(input.offer ? { offer: input.offer } : {}),
     platform: input.schema.id,
     pageUrl: input.pageUrl,
     notes: draft.notes,
@@ -271,7 +347,7 @@ function finish(input: BuildInput, draft: PlanDraft): FillPlan {
   });
   return {
     platform: input.schema.id,
-    offer: input.schema.offer,
+    offer: input.offer ?? input.schema.offer,
     pageUrl: input.pageUrl,
     actions: draft.actions,
     deferred: draft.deferred,
@@ -293,8 +369,29 @@ function blocked(draft: PlanDraft, fieldId: string): boolean {
   return draft.errors.some((item) => item.fieldId === fieldId && item.level === "error");
 }
 
-function findControl(page: Page, field: FieldSchema): Control | undefined {
-  const candidates = page.controls.filter((control) => fits(control, field.control));
+function resolveScopes(draft: PlanDraft): void {
+  for (const field of draft.schema.fields) {
+    if (!field.within?.length) continue;
+    const section = findSection(draft.page.document, field.within);
+    draft.scopes.set(field.id, section);
+    if (section && !draft.fences.includes(section)) draft.fences.push(section);
+  }
+}
+
+/** The section a field must bind inside: undefined for the whole page, null when its section is absent. */
+function scopeOf(draft: PlanDraft, field: FieldSchema): Element | null | undefined {
+  if (!field.within?.length) return undefined;
+  return draft.scopes.get(field.id) ?? null;
+}
+
+function findControl(draft: PlanDraft, field: FieldSchema): Control | undefined {
+  const scope = scopeOf(draft, field);
+  if (scope === null) return undefined;
+  const candidates = draft.page.controls.filter((control) => {
+    if (!fits(control, field.control)) return false;
+    if (scope) return scope.contains(control.element);
+    return !draft.fences.some((fence) => fence.contains(control.element));
+  });
   const exact = candidates.filter((control) => labelMatches(control, field.labels, "exact"));
   const pool = exact.length
     ? exact
@@ -310,7 +407,7 @@ function fits(control: Control, kind: string): boolean {
     case "file":
       return control.type === "file";
     case "button":
-      return control.tag === "BUTTON";
+      return isButtonControl(control);
     case "select":
       return control.tag === "SELECT";
     case "textarea":
