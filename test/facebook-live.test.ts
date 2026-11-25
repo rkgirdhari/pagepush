@@ -26,7 +26,7 @@ function fixture(name: string): Document {
   });
   // Each editor's Save enables a render after any edit inside it.
   doc.querySelectorAll("[data-enables]").forEach((save) => {
-    const region = save.closest("section, [data-step], [role='dialog']")!;
+    const region = save.closest("section, [data-step], [role='dialog']") ?? doc.body;
     region.addEventListener("input", () => later(() => save.setAttribute("aria-disabled", "false")));
   });
   wireCategories(doc);
@@ -34,7 +34,10 @@ function fixture(name: string): Document {
   return doc;
 }
 
-/** Picking an option adds a "Selected values" chip with a Remove button and clears the listbox. */
+/**
+ * Picking an option adds a "Selected values" chip with a Remove button and drops that option from
+ * the list (live, the list is re-queried as the next value is typed).
+ */
 function wireCategories(doc: Document): void {
   const list = doc.getElementById("fb-category-list");
   const chips = doc.querySelector("[role='list'][aria-label='Selected values']");
@@ -48,7 +51,7 @@ function wireCategories(doc: Document): void {
       remove.setAttribute("aria-label", `Remove ${name}`);
       chip.appendChild(remove);
       chips?.appendChild(chip);
-      list.innerHTML = "";
+      option.remove();
       (doc.getElementById("fb-category") as HTMLInputElement).value = "";
     }));
   });
@@ -179,4 +182,27 @@ test("the Action button dialog picks the option row by title and saves only afte
   await executeCommit(page, live, approve(live), { settleMs: 500 });
   assert.equal(saves["fb-cta-save"], 1);
   assert.equal(clicks["fb-cta-save"], 0);
+});
+
+test("/pages/creation drafts the Page name and categories; Create a Page waits for Approve & Commit", async () => {
+  const doc = fixture("pages-creation");
+  const clicks = countClicks(doc, ["fb-create"]);
+  const essentials: FacebookPack = { ...structuredClone(pack), tier: "essentials" };
+  const plan = planFacebook(doc, essentials, "https://www.facebook.com/pages/creation/");
+  assert.deepEqual(plan.errors, []);
+  const ids = plan.actions.map((action) => `${action.phase}:${action.id}:${action.controlId}`);
+  assert.deepEqual(ids, ["draft:pageName:fb-name", "draft:categories:fb-category", "commit:createPage:fb-create"]);
+  assert.ok(plan.deferred.includes("bio"), "the creation step has no bio field");
+
+  const draft = await executeDraft(doc, plan, { settleMs: 500 });
+  assert.deepEqual(draft.unconfirmed, []);
+  assert.equal((doc.getElementById("fb-name") as HTMLInputElement).value, "Northline Studio");
+  assert.deepEqual(
+    Array.from(doc.querySelectorAll("[aria-label='Selected values'] [role='button']")).map((el) => el.getAttribute("aria-label")),
+    ["Remove Software Company", "Remove Consulting Agency"],
+  );
+  assert.equal(clicks["fb-create"], 0, "drafting never creates the Page");
+
+  await executeCommit(doc, plan, approve(plan), { settleMs: 500 });
+  assert.equal(clicks["fb-create"], 1);
 });

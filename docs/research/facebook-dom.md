@@ -78,7 +78,13 @@ structural rebuilds of those skeletons with the Page renamed to the fictional "N
 | About > Details > Address | "Address" (text), "City/Town" is `input[role=combobox][type=search]`, "ZIP" `maxlength=12`, "Neighborhood", map. Hours: "Add your business address first before adding business hours". | City/Town is never typed into (a typed value would read back but not save); it is listed for the person to pick. ZIP cap confirmed. Hours unverified. |
 | Add action button | Profile "…" menu → intro modal ("Try It") → dialog "Action button": 15 `div[role=radio]` rows (title + description run together), each with a nested `role=radio` indicator `aria-labelledby` its title; groups are `role=list`. Two steps: Next → `<label>` "Add website link" → Save. | Nested indicator radios are skipped; option names come from `aria-labelledby`; the dialog itself can be the radio group; labels "Choose an option", "Add website link", and scope "Action button" added. The person clicks Next; Page Push re-plans the link step. |
 
-Not captured: the Page creation view. `/pages/create` and `/pages/creation` both answer "This content
-isn't available right now" while acting as a Page; it needs the personal profile, so `pageName`,
-`createPage`, and the create-view labels remain the Phase 2 guesses. The launch post's 63,206
+Page creation (`/pages/creation/`), captured the same day from the personal profile (it answers "This
+content isn't available right now" while acting as a Page). Only the creation panel was read; the
+account header and preview were left out. `h1 "Create a Page"`; `role=form "Pages"`; `<label>` "Page
+name" wrapping `input[type=text]` with no maxlength; the category typeahead is labelled "Search
+category" and behaves like the About editor (listbox options, "Selected values" chips with Remove
+buttons); "Popular categories" are plain buttons; no bio field on this step; the commit button is
+`div[role=button][aria-label="Create a Page"]`, `aria-disabled` until filled. Schema: "Create a Page"
+and "Search category" labels added. One category was picked to read the chip markup and then removed;
+no Page was created. The launch post's 63,206
 character cap is not exposed by the live editor (no `maxlength`) and stays the published figure.

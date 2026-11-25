@@ -18,7 +18,7 @@
     }
   ],
   "rules": {
-    "status": "Phase 5 (2026-11-25) verified the Business Dashboard, the /post/create composer, the Page About editors (Intro bio, Category, Links, Contact info, Details address), and the Add action button dialog against a logged-in Business Page; see docs/research/facebook-dom.md and test/fixtures/facebook/. The Page creation view (/pages/create) refuses while acting as a Page, so pageName, createPage, and the create-view labels remain unverified. Hours stay unverified: Facebook locks them until an address is saved.",
+    "status": "Phase 5 (2026-11-25) verified the Business Dashboard, the /post/create composer, the Page About editors (Intro bio, Category, Links, Contact info, Details address), and the Add action button dialog against a logged-in Business Page; see docs/research/facebook-dom.md and test/fixtures/facebook/. The Page creation view (/pages/creation/) was verified from the personal profile the same day; it refuses while acting as a Page. Hours stay unverified: Facebook locks them until an address is saved.",
     "binding": "Controls are found by visible label, aria-label, or placeholder. Facebook does not publish input names and its class names change, so the shim never depends on either.",
     "scope": "Business Pages only. Outside the Page creation view, the page must name the pack's Page (as a heading, the dashboard greeting \"Hi <Page>\", or the composer prompt \"What's on your mind, <Page>?\") and show at least one Page-admin signal, or the plan refuses with no actions.",
     "commit": "Create Page, Save, the action-button Save, and Post are commit actions. They run only after Approve & Commit for this exact plan hash.",
@@ -58,11 +58,11 @@
       "maxLength": 75,
       "step": "create",
       "phase": "draft",
-      "notes": "Unverified limit. Facebook reviews name changes on existing Pages."
+      "notes": "Verified at /pages/creation/: a <label> \"Page name\" wrapping input[type=text] inside role=form \"Pages\". No maxlength attribute, so the 75 cap stays unverified. Facebook reviews name changes on existing Pages."
     },
     {
       "id": "categories",
-      "labels": ["Categories", "Category", "Category (required)"],
+      "labels": ["Categories", "Search category", "Category", "Category (required)"],
       "path": "page.categories",
       "control": "tokens",
       "taxonomy": true,
@@ -71,7 +71,7 @@
       "maxItems": 3,
       "step": "create",
       "phase": "draft",
-      "notes": "Verified: input[role=combobox][aria-label=Categories] with aria-controls to a role=listbox of role=option rows; chips sit in span[role=list][aria-label=\"Selected values\"] with \"Remove <name>\" buttons; the editor counts \"n/3 categories\". Each value must be an option Facebook lists; the shim clicks it and never invents one."
+      "notes": "Verified: input[role=combobox][aria-label=Categories] with aria-controls to a role=listbox of role=option rows; chips sit in span[role=list][aria-label=\"Selected values\"] with \"Remove <name>\" buttons; the editor counts \"n/3 categories\". Each value must be an option Facebook lists; the shim clicks it and never invents one. On /pages/creation/ the same combobox is labelled \"Search category\" (one category, plus two extra), beside \"Popular categories\" buttons."
     },
     {
       "id": "bio",
@@ -81,7 +81,7 @@
       "maxLength": 255,
       "step": "create",
       "phase": "draft",
-      "notes": "Verified on About > Intro > Edit bio: a <label> \"Introduce yourself\" wrapping <textarea maxlength=255>. Any view's own maxlength still tightens the cap when lower."
+      "notes": "Verified on About > Intro > Edit bio: a <label> \"Introduce yourself\" wrapping <textarea maxlength=255>. Any view's own maxlength still tightens the cap when lower. The /pages/creation/ step has no bio field; the bio is set afterwards in the About editor."
     },
     {
       "id": "website",
@@ -220,11 +220,12 @@
     },
     {
       "id": "createPage",
-      "labels": ["Create Page"],
+      "labels": ["Create a Page", "Create Page"],
       "path": "commit.createPage",
       "control": "button",
       "step": "create",
-      "phase": "commit"
+      "phase": "commit",
+      "notes": "Verified: div[role=button][aria-label=\"Create a Page\"], aria-disabled until the name and a category are set; commit waits for it to enable."
     },
     {
       "id": "saveChanges",

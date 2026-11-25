@@ -1,0 +1,35 @@
+<!--
+  facebook.com/pages/creation/ on the personal profile. Captured 2026-11-25 and rebuilt from the
+  sanitized capture of the creation panel only (the account header and the live preview are left
+  out; no profile details are kept). Facts: h1 "Create a Page"; role=form "Pages"; a <label>
+  "Page name" wrapping input[type=text] with no maxlength; the category typeahead is labelled
+  "Search category" with aria-controls to a role=listbox, and picks land as "Selected values"
+  chips with "Remove <name>" buttons; "Popular categories" are plain buttons; there is no bio field
+  on this step; the commit button is div[role=button][aria-label="Create a Page"], aria-disabled
+  until the form is filled.
+-->
+<div role="main">
+  <h1>Create a Page</h1>
+  <div role="form" aria-label="Pages">
+    <span>Choose a Page name</span>
+    <span>Pick a name people will recognize, your own, your brand's, or your business's.</span>
+    <div role="button" tabindex="0" aria-label="Learn more about Pages">Learn more</div>
+    <label><span>Page name</span><input id="fb-name" type="text"></label>
+    <span>Choose a category</span>
+    <span>Choose one category to show on your Page. You can add two extra categories to improve search results.</span>
+    <label>
+      <span>Search category</span>
+      <span role="list" aria-label="Selected values"></span>
+      <input id="fb-category" role="combobox" type="search" aria-label="Search category" aria-controls="fb-category-list" aria-expanded="false">
+      <ul id="fb-category-list" role="listbox">
+        <li role="option" aria-selected="false">Software Company</li>
+        <li role="option" aria-selected="false">Consulting Agency</li>
+        <li role="option" aria-selected="false">Web Designer</li>
+      </ul>
+    </label>
+    <h2>Popular categories</h2>
+    <div role="button" tabindex="0">Personal blog</div>
+    <div role="button" tabindex="0">Product/service</div>
+  </div>
+  <div role="button" tabindex="0" aria-label="Create a Page" aria-disabled="true" id="fb-create" data-enables>Create a Page</div>
+</div>
