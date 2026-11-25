@@ -66,7 +66,7 @@ test("checkPack accepts the example and explains what is wrong with bad imports"
   const media = checkPack({ ...pack, media: { coverPhoto: "always" } });
   assert.equal(media.errors[0]?.code, "enum");
 
-  const limits = checkPack({ ...pack, page: { ...pack.page, bio: "x".repeat(102) }, contact: { website: "northline", email: "nope" } });
+  const limits = checkPack({ ...pack, page: { ...pack.page, bio: "x".repeat(256) }, contact: { website: "northline", email: "nope" } });
   assert.deepEqual(limits.errors.map((item) => `${item.fieldId}:${item.code}`).sort(), ["bio:max-length", "email:email", "website:url"]);
 
   const extra = checkPack({ ...pack, password: "x", page: { ...pack.page, slogan: "y" } });
@@ -78,10 +78,10 @@ test("checkPack accepts the example and explains what is wrong with bad imports"
 });
 
 test("counters track Page name, bio, and the launch post against the schema limits", () => {
-  const over = { ...pack, page: { ...pack.page, bio: "é".repeat(102) } };
+  const over = { ...pack, page: { ...pack.page, bio: "é".repeat(256) } };
   const byPath = Object.fromEntries(counters(over).map((item) => [item.path, item]));
   assert.deepEqual([byPath["page.name"]!.used, byPath["page.name"]!.max], [16, 75]);
-  assert.deepEqual([byPath["page.bio"]!.used, byPath["page.bio"]!.over], [102, true]);
+  assert.deepEqual([byPath["page.bio"]!.used, byPath["page.bio"]!.over], [256, true]);
   assert.equal(byPath["launchPost.text"]!.max, 63206);
 });
 

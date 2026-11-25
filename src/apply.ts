@@ -10,6 +10,7 @@ import {
   radioText,
   radiosIn,
   rowOf,
+  tokenLanded,
   visibleText,
   widgetOf,
 } from "./bind.ts";
@@ -231,10 +232,18 @@ function activate(el: Element): void {
   else clickElement(el);
 }
 
+/**
+ * Facebook keeps Save and Post aria-disabled until React has registered the drafted text, so the
+ * click waits (bounded) for the button to enable and reports false rather than clicking a dead one.
+ */
 async function writeButton(ctx: Ctx, action: Action): Promise<boolean> {
-  const el = locate(ctx.doc, action.controlId);
-  if (!el) return false;
-  clickElement(el);
+  if (!locate(ctx.doc, action.controlId)) return false;
+  const enabled = (): boolean => {
+    const el = locate(ctx.doc, action.controlId);
+    return el != null && el.getAttribute("aria-disabled") !== "true" && !el.hasAttribute("disabled");
+  };
+  if (!enabled() && !(await until(ctx, enabled))) return false;
+  clickElement(locate(ctx.doc, action.controlId)!);
   return true;
 }
 
@@ -615,17 +624,6 @@ function optionMatches(option: Element, token: string): boolean {
   const ids = [option.getAttribute("data-slug"), option.getAttribute("value")];
   const text = (option.textContent ?? "").trim();
   return ids.some((id) => id != null && id !== "" && labelKey(id) === want) || labelKey(text) === want;
-}
-
-function tokenLanded(widget: Element, token: string, option?: Element): boolean {
-  const want = labelKey(token);
-  const label = labelKey(option?.textContent ?? "");
-  for (const chip of widget.querySelectorAll("[data-tag], [role='option'][aria-selected='true']")) {
-    const tag = labelKey(chip.getAttribute("data-tag") ?? chip.getAttribute("data-slug") ?? chip.getAttribute("value") ?? "");
-    const text = labelKey(chip.textContent ?? "");
-    if (tag === want || text === want || (label && text === label)) return true;
-  }
-  return false;
 }
 
 function chipLanded(widget: Element, value: string): boolean {

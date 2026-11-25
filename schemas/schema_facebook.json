@@ -1,6 +1,6 @@
 {
   "id": "facebook",
-  "version": "2026-11-24",
+  "version": "2026-11-25",
   "title": "Facebook Business Page setup",
   "offer": {
     "name": "Facebook Business Page Setup Sprint",
@@ -18,22 +18,13 @@
     }
   ],
   "rules": {
-    "status": "Labels, limits, and page signals are informed guesses until Phase 5 locks them against sanitized captures of the logged-in Page creation and settings views. Phase 5 also replaces these help-center roots with the specific articles the limits come from.",
+    "status": "Phase 5 (2026-11-25) verified the Business Dashboard, the /post/create composer, the Page About editors (Intro bio, Category, Links, Contact info, Details address), and the Add action button dialog against a logged-in Business Page; see docs/research/facebook-dom.md and test/fixtures/facebook/. The Page creation view (/pages/create) refuses while acting as a Page, so pageName, createPage, and the create-view labels remain unverified. Hours stay unverified: Facebook locks them until an address is saved.",
     "binding": "Controls are found by visible label, aria-label, or placeholder. Facebook does not publish input names and its class names change, so the shim never depends on either.",
-    "scope": "Business Pages only. Outside the Page creation view, the page must show the pack's Page name as a heading and at least one Page-admin signal, or the plan refuses with no actions.",
+    "scope": "Business Pages only. Outside the Page creation view, the page must name the pack's Page (as a heading, the dashboard greeting \"Hi <Page>\", or the composer prompt \"What's on your mind, <Page>?\") and show at least one Page-admin signal, or the plan refuses with no actions.",
     "commit": "Create Page, Save, the action-button Save, and Post are commit actions. They run only after Approve & Commit for this exact plan hash.",
     "media": "Profile picture and cover photo are attached by the person. The shim tracks them as a checklist and, when the pack marks one required, blocks commit until the file input has a file.",
     "secrets": "Packs never carry passwords, two-factor codes, or access tokens. A sign-in page is refused.",
-    "pageSignals": [
-      "Professional dashboard",
-      "Meta Business Suite",
-      "Edit Page",
-      "Page settings",
-      "Ad Center",
-      "Boost post",
-      "Switch into Page",
-      "Insights"
-    ],
+    "pageSignals": ["Business Dashboard", "Manage Page", "Professional dashboard", "Meta Business Suite", "Edit Page", "Page settings", "Ad Center", "Boost post", "Switch into Page", "Insights"],
     "createPaths": ["/pages/create", "/pages/creation"],
     "hoursModes": ["No hours available", "Always open", "Open on selected hours"],
     "tiers": {
@@ -71,7 +62,7 @@
     },
     {
       "id": "categories",
-      "labels": ["Category", "Categories", "Category (required)"],
+      "labels": ["Categories", "Category", "Category (required)"],
       "path": "page.categories",
       "control": "tokens",
       "taxonomy": true,
@@ -80,26 +71,27 @@
       "maxItems": 3,
       "step": "create",
       "phase": "draft",
-      "notes": "Typeahead. Each value must be an option Facebook lists; the shim clicks it and never invents one."
+      "notes": "Verified: input[role=combobox][aria-label=Categories] with aria-controls to a role=listbox of role=option rows; chips sit in span[role=list][aria-label=\"Selected values\"] with \"Remove <name>\" buttons; the editor counts \"n/3 categories\". Each value must be an option Facebook lists; the shim clicks it and never invents one."
     },
     {
       "id": "bio",
-      "labels": ["Bio", "Bio (optional)", "Intro"],
+      "labels": ["Introduce yourself", "Bio", "Bio (optional)", "Intro"],
       "path": "page.bio",
       "control": "textarea",
-      "maxLength": 101,
+      "maxLength": 255,
       "step": "create",
       "phase": "draft",
-      "notes": "Unverified limit; tightened when the live control's maxlength is lower."
+      "notes": "Verified on About > Intro > Edit bio: a <label> \"Introduce yourself\" wrapping <textarea maxlength=255>. Any view's own maxlength still tightens the cap when lower."
     },
     {
       "id": "website",
-      "labels": ["Website", "Website URL"],
+      "labels": ["Website", "Website URL", "Link"],
       "path": "contact.website",
       "control": "url",
       "format": "url",
       "step": "contact",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: About > Links > \"Websites, blogs, portfolios\" opens a <label> \"Link\" wrapping input[type=text], beside \"Link description\" (maxlength 150) and an \"Add link\" button."
     },
     {
       "id": "phone",
@@ -108,7 +100,8 @@
       "control": "text",
       "pattern": "^\\+?[0-9][0-9 ().-]{5,22}$",
       "step": "contact",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: <label> \"Phone number\" wrapping input[type=text], next to a separate country-code menu button (aria-label \"Country code, US+1\"). When the pack number starts with the picker's code, the shim drops the code and says so in the plan."
     },
     {
       "id": "email",
@@ -117,7 +110,8 @@
       "control": "email",
       "format": "email",
       "step": "contact",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: <label> \"Email\" wrapping input[type=text] (not type=email)."
     },
     {
       "id": "address",
@@ -126,7 +120,8 @@
       "control": "text",
       "maxLength": 200,
       "step": "location",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: <label> \"Address\" wrapping input[type=text] in About > Details > Address. Hours stay locked until an address is saved."
     },
     {
       "id": "city",
@@ -134,7 +129,8 @@
       "path": "contact.city",
       "control": "text",
       "step": "location",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: City/Town is input[role=combobox][type=search], a typeahead that only counts a picked suggestion. The shim never types into it; the city is listed for the person to pick."
     },
     {
       "id": "zip",
@@ -143,7 +139,8 @@
       "control": "text",
       "maxLength": 12,
       "step": "location",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: <label> \"ZIP\" wrapping input[type=text][maxlength=12]."
     },
     {
       "id": "hoursMode",
@@ -156,27 +153,29 @@
     },
     {
       "id": "ctaType",
-      "labels": ["Choose a button", "Which button do you want people to see?"],
-      "within": ["Add action button", "Edit action button", "Add button"],
+      "labels": ["Choose an option", "Choose a button", "Which button do you want people to see?"],
+      "within": ["Action button", "Add action button", "Edit action button", "Add button"],
       "path": "cta.type",
       "control": "choice",
       "step": "cta",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: profile \"...\" menu > Add action button > Try It opens the dialog \"Action button\" with 15 div[role=radio] rows (title plus description), each holding an inner role=radio aria-labelledby its title: Book now, Sign up, Start order, Get tickets, Send message, Send WhatsApp message, Call now, Send email, Contact us, Learn more, Watch now, Visit group, Play game, Buy now, Reserve. It is a two-step wizard: the person clicks Next, and Page Push re-plans the link step."
     },
     {
       "id": "ctaUrl",
-      "labels": ["Website", "Website URL", "Link"],
-      "within": ["Add action button", "Edit action button", "Add button"],
+      "labels": ["Add website link", "Website", "Website URL", "Link"],
+      "within": ["Action button", "Add action button", "Edit action button", "Add button"],
       "path": "cta.url",
       "control": "url",
       "format": "url",
       "step": "cta",
-      "phase": "draft"
+      "phase": "draft",
+      "notes": "Verified: step two of the Action button dialog is a <label> \"Add website link\" wrapping input[type=text]; Save stays aria-disabled until it has a value."
     },
     {
       "id": "ctaSave",
       "labels": ["Save"],
-      "within": ["Add action button", "Edit action button", "Add button"],
+      "within": ["Action button", "Add action button", "Edit action button", "Add button"],
       "path": "commit.saveActionButton",
       "control": "button",
       "step": "cta",
@@ -191,7 +190,7 @@
       "maxLength": 63206,
       "step": "post",
       "phase": "draft",
-      "notes": "Lexical composer. Written through the browser input pipeline, never by setting DOM text."
+      "notes": "Verified at /post/create: div[role=textbox][contenteditable][data-lexical-editor] labelled \"What's on your mind, <Page name>?\" (the shim adds that label from the pack) inside role=form \"Posts\", in a role=main region whose title text is \"Create post\" (no heading element). No maxlength attribute, so the cap stays Facebook's published limit. Written through the browser input pipeline, never by setting DOM text."
     },
     {
       "id": "publishPost",
@@ -200,7 +199,8 @@
       "path": "commit.publishLaunchPost",
       "control": "button",
       "step": "post",
-      "phase": "commit"
+      "phase": "commit",
+      "notes": "Verified: div[role=button][aria-label=Post], aria-disabled until the composer has text; commit waits for it to enable. The Boost post and Add AI label switches beside it are never touched."
     },
     {
       "id": "profilePicture",
@@ -233,7 +233,8 @@
       "control": "button",
       "pick": "last",
       "step": "contact",
-      "phase": "commit"
+      "phase": "commit",
+      "notes": "Verified: each About editor ends in div[role=button][aria-label=Save], aria-disabled until something changed, beside Cancel."
     }
   ]
 }

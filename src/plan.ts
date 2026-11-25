@@ -7,6 +7,8 @@ import {
   labelMatches,
   radioText,
   radiosIn,
+  tokenLanded,
+  widgetOf,
   type Page,
 } from "./bind.ts";
 import { asStringList, effectiveMax, isBlank, validateField } from "./validate.ts";
@@ -110,7 +112,11 @@ function planField(draft: PlanDraft, field: FieldSchema): void {
     return;
   }
   draft.matched.add(control.id);
-  if (control.disabled) {
+  // Facebook keeps Save and Post aria-disabled until the drafted text registers. Such a commit
+  // button is planned; executeCommit waits for it to enable and refuses if it never does. A
+  // natively disabled button stays locked.
+  const enablesAfterDraft = field.control === "button" && field.phase === "commit" && !control.element.hasAttribute("disabled");
+  if (control.disabled && !enablesAfterDraft) {
     draft.warnings.push(issue("warning", field.id, "locked", `${field.labels[0]} is locked on this page and was left alone.`));
     return;
   }
@@ -449,7 +455,9 @@ function matchedLabel(control: Control, field: FieldSchema): string {
 function missingTokens(control: Control, tokens: string[]): string[] {
   const options = listedOptions(control);
   if (!options.length) return [];
-  return tokens.filter((token) => !options.some((option) => optionMatchesToken(option, token)));
+  // A value already picked (a chip) is no longer listed as an option, but it is not missing.
+  const widget = widgetOf(control.element);
+  return tokens.filter((token) => !tokenLanded(widget, token) && !options.some((option) => optionMatchesToken(option, token)));
 }
 
 function listedOptions(control: Control): Element[] {

@@ -1,0 +1,38 @@
+<!--
+  The "Action button" dialog (profile ... menu > Add action button > Try It). Captured 2026-11-25 and
+  rebuilt from the sanitized capture. Facts: options are div[role=radio] rows whose text runs the
+  title and description together; each row holds a nested role=radio indicator aria-labelledby the
+  title; groups are role=list (not radiogroup) under h2-style headings; it is a two-step wizard
+  (Next, then "Add website link" and Save). Both steps are shown here; data-step marks which.
+  Only five of the fifteen captured options are kept; the rest share the same shape.
+-->
+<div role="dialog">
+  <h2>Action button</h2>
+  <div role="button" tabindex="0" aria-label="Close"></div>
+  <div data-step="1">
+    <h2>Choose an option</h2>
+    <span>Tell people how to engage with you by customizing the action button at the top of your Page.</span>
+    <h3>Help people support you</h3>
+    <div role="list">
+      <div role="radio" aria-checked="false" tabindex="0" id="fb-cta-book"><span id="cta-t-book">Book now</span><span>Connect a scheduling tool so people can book appointments</span><div role="radio" aria-checked="false" tabindex="0" aria-labelledby="cta-t-book"></div></div>
+      <div role="radio" aria-checked="false" tabindex="0"><span id="cta-t-signup">Sign up</span><span>Opens a website with a sign-up form</span><div role="radio" aria-checked="false" tabindex="0" aria-labelledby="cta-t-signup"></div></div>
+    </div>
+    <h3>Get people to contact you</h3>
+    <div role="list">
+      <div role="radio" aria-checked="true" tabindex="0"><span id="cta-t-message">Send message</span><span>Starts chat on Facebook Messenger</span><div role="radio" aria-checked="true" tabindex="0" aria-labelledby="cta-t-message"></div></div>
+      <div role="radio" aria-checked="false" tabindex="0"><span id="cta-t-contact">Contact us</span><span>Opens a website or a contact form</span><div role="radio" aria-checked="false" tabindex="0" aria-labelledby="cta-t-contact"></div></div>
+    </div>
+    <h3>Link to your group or app</h3>
+    <div role="list">
+      <div role="radio" aria-checked="false" tabindex="0" id="fb-cta-learn"><span id="cta-t-learn">Learn more</span><span>Opens a website</span><div role="radio" aria-checked="false" tabindex="0" aria-labelledby="cta-t-learn"></div></div>
+    </div>
+    <div role="button" tabindex="0">Back</div>
+    <div role="button" tabindex="0">Next</div>
+  </div>
+  <div data-step="2">
+    <span>Learn more</span>
+    <label><span>Add website link</span><input id="fb-cta-url" type="text"></label>
+    <div role="button" tabindex="0">Back</div>
+    <div role="button" tabindex="0" aria-label="Save" aria-disabled="true" data-enables id="fb-cta-save">Save</div>
+  </div>
+</div>

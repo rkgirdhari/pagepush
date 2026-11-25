@@ -168,7 +168,12 @@ export function checkboxesByLabel(root: ParentNode, label: string): Element[] {
 
 export function radiosIn(root: ParentNode): Element[] {
   const found: Element[] = [];
-  root.querySelectorAll("input[type='radio'], [role='radio']").forEach((node) => found.push(node as Element));
+  root.querySelectorAll("input[type='radio'], [role='radio']").forEach((node) => {
+    // Facebook nests a second role=radio (the round indicator) inside each option row. The row is
+    // what a person clicks, so only the outermost radio counts as an option.
+    if (node.parentElement?.closest("[role='radio']")) return;
+    found.push(node as Element);
+  });
   return found;
 }
 
@@ -176,15 +181,31 @@ export function radiosIn(root: ParentNode): Element[] {
 export function radioText(radio: Element): string {
   const wrapping = radio.closest("label");
   if (wrapping) return visibleText(wrapping);
-  const aria = radio.getAttribute("aria-label");
-  if (aria) return aria.trim();
+  const own = ariaName(radio);
+  if (own) return own;
+  // An option row titled through its nested indicator: <div role=radio><div role=radio aria-labelledby=title>.
+  const inner = radio.querySelector("[role='radio']");
+  const innerName = inner ? ariaName(inner) : "";
+  if (innerName) return innerName;
   const doc = radio.ownerDocument;
   if (radio.id && doc) {
     for (const label of doc.querySelectorAll("label")) {
       if (label.getAttribute("for") === radio.id) return visibleText(label);
     }
   }
-  return (radio.textContent ?? "").replace(/s+/g, " ").trim();
+  return (radio.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+function ariaName(el: Element): string {
+  const aria = el.getAttribute("aria-label");
+  if (aria?.trim()) return aria.trim();
+  const doc = el.ownerDocument;
+  const ids = (el.getAttribute("aria-labelledby") ?? "").split(/\s+/).filter(Boolean);
+  if (!doc || !ids.length) return "";
+  return ids
+    .map((id) => (doc.getElementById(id)?.textContent ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function radioChecked(radio: Element): boolean {
@@ -212,7 +233,10 @@ function controlsByLabel(
   return found;
 }
 
-const SECTION_SELECTOR = "section, fieldset, [role='group'], [role='dialog'], [role='radiogroup'], [role='region']";
+const SECTION_SELECTOR =
+  "section, fieldset, [role='group'], [role='dialog'], [role='radiogroup'], [role='region'], [role='main'], [role='form']";
+/** Regions Facebook names only by their first line of text (the /post/create view has no headings). */
+const TITLED_BY_FIRST_TEXT = new Set(["main", "dialog"]);
 
 /** The first section named by any of `names`, optionally only inside `within`. */
 export function findSection(doc: Document, names: string[], within?: Element): Element | null {
@@ -226,7 +250,9 @@ export function findSection(doc: Document, names: string[], within?: Element): E
   for (const heading of doc.querySelectorAll("h1, h2, h3, legend")) {
     if (!wanted.includes(labelKey(heading.textContent ?? ""))) continue;
     const section = heading.closest(SECTION_SELECTOR) ?? heading.parentElement;
-    if (section && inside(section)) return section;
+    // A heading straight inside the scoping dialog (Facebook's "Choose an option" in "Action
+    // button") names the dialog's own content, so the dialog itself is the group.
+    if (section && (inside(section) || section === within)) return section;
   }
   return null;
 }
@@ -244,7 +270,25 @@ function sectionTexts(doc: Document, el: Element): string[] {
   }
   const heading = Array.from(el.children).find((child) => /^(H1|H2|H3|LEGEND)$/.test(child.tagName));
   if (heading) texts.push(heading.textContent ?? "");
+  if (!texts.length && TITLED_BY_FIRST_TEXT.has(el.getAttribute("role") ?? "")) {
+    const first = firstText(el);
+    if (first) texts.push(first);
+  }
   return texts;
+}
+
+/** The first non-empty text node outside form controls, the way a person reads a region's title. */
+function firstText(el: Element): string {
+  const doc = el.ownerDocument;
+  if (!doc) return "";
+  const walker = doc.createTreeWalker(el, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const parent = node.parentElement;
+    if (parent?.closest("input, textarea, select, [contenteditable='true'], [role='button']")) continue;
+    const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 export function rowOf(input: Element): Element {
@@ -304,4 +348,29 @@ export function fileCount(el: Element | null): number {
   if (!el || !("files" in el)) return 0;
   const files = (el as HTMLInputElement).files;
   return files?.length ?? 0;
+}
+
+/** True when `token` already shows as a picked value in the widget (chip, selected option, or Facebook's Remove button). */
+export function tokenLanded(widget: Element, token: string, option?: Element): boolean {
+  const want = labelKey(token);
+  const label = labelKey(option?.textContent ?? "");
+  for (const chip of widget.querySelectorAll("[data-tag], [role='option'][aria-selected='true']")) {
+    const tag = labelKey(chip.getAttribute("data-tag") ?? chip.getAttribute("data-slug") ?? chip.getAttribute("value") ?? "");
+    const text = labelKey(chip.textContent ?? "");
+    if (tag === want || text === want || (label && text === label)) return true;
+  }
+  // Facebook (verified 2026-11-25): picked values sit in span[role=list][aria-label="Selected values"],
+  // each with a "Remove <value>" button. The listbox itself is cleared after a pick.
+  const names = new Set([want, label].filter(Boolean));
+  for (const remove of widget.querySelectorAll("[role='button'][aria-label]")) {
+    const aria = labelKey(remove.getAttribute("aria-label") ?? "");
+    if (aria.startsWith("remove ") && names.has(aria.slice("remove ".length))) return true;
+  }
+  for (const list of widget.querySelectorAll("[role='list'][aria-label]")) {
+    if (labelKey(list.getAttribute("aria-label") ?? "") !== "selected values") continue;
+    for (const item of list.children) {
+      if (names.has(labelKey(visibleText(item)))) return true;
+    }
+  }
+  return false;
 }

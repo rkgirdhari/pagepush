@@ -144,17 +144,54 @@ export function assessFacebook(pack: FacebookPack): PlanIssue[] {
 export function planFacebook(doc: Document, pack: FacebookPack, pageUrl: string): FillPlan {
   const prepared = prepareFacebookPack(pack);
   const offer = tierOffer(prepared.pack.tier) ?? undefined;
+  const phoneIssues = fitPhoneToPicker(doc, prepared.pack);
   return buildPlan({
-    schema: facebookSchema,
+    schema: schemaFor(prepared.pack),
     document: doc,
     pack: prepared.pack as unknown as Record<string, unknown>,
     pageUrl,
     offer,
-    extraIssues: [...prepared.issues, ...assessFacebook(pack)],
+    extraIssues: [...prepared.issues, ...phoneIssues, ...assessFacebook(pack)],
     guard: (page) => guardFacebook(page, prepared.pack, pageUrl),
     onUnmapped: (control, draft) => onFacebookUnmapped(control, draft),
     after: (draft) => facebookAfter(draft, prepared.pack),
   });
+}
+
+/** Facebook prompts the Page composer as "What's on your mind, <Page name>?" (verified 2026-11-25). */
+function composerPrompt(pageName: string): string {
+  return `What's on your mind, ${pageName}?`;
+}
+
+/** The schema with the labels that depend on the pack, such as the Page-named composer prompt. */
+function schemaFor(pack: FacebookPack): PlatformSchema {
+  const name = pack.page?.name?.trim();
+  if (!name) return facebookSchema;
+  return {
+    ...facebookSchema,
+    fields: facebookSchema.fields.map((field) =>
+      field.id === "launchPost" ? { ...field, labels: [composerPrompt(name), ...field.labels] } : field,
+    ),
+  };
+}
+
+/**
+ * Facebook's phone editor has its own country-code picker ("Country code, US+1"). When the pack
+ * number starts with that same code, drop it so the field does not get it twice, and say so.
+ * A different code is left alone and flagged: the person picks the country.
+ */
+function fitPhoneToPicker(doc: Document, pack: FacebookPack): PlanIssue[] {
+  const phone = pack.contact?.phone;
+  if (!phone || !phone.startsWith("+")) return [];
+  const picker = Array.from(doc.querySelectorAll("[aria-label]")).find((el) => /^country code\b/i.test(el.getAttribute("aria-label") ?? ""));
+  const code = /\+(\d{1,4})\s*$/.exec(picker?.getAttribute("aria-label") ?? "")?.[1];
+  if (!code) return [];
+  const match = new RegExp(`^\\+${code}(?![0-9])[\\s.-]*`).exec(phone);
+  if (!match) {
+    return [issue("warning", "phone", "country-code", `Facebook's country picker shows +${code}, but the phone number starts with a different code. Pick the country yourself before saving.`)];
+  }
+  pack.contact!.phone = phone.slice(match[0].length);
+  return [issue("warning", "phone", "country-code", `Facebook's country picker already shows +${code}, so the number is drafted as "${pack.contact!.phone}".`)];
 }
 
 export function facebookContext(pageUrl: string): "create" | "page" | "off-site" {
@@ -182,9 +219,18 @@ function guardFacebook(page: Page, pack: FacebookPack, pageUrl: string): PlanIss
   }
   if (context === "create") return [];
   const doc = page.document;
-  const name = labelKey(pack.page?.name ?? "");
+  const rawName = (pack.page?.name ?? "").trim();
+  const name = labelKey(rawName);
+  // Verified 2026-11-25: the Page view shows the name as an h2 under "Manage Page"; the Business
+  // Dashboard only greets "Hi <Page>"; /post/create has no headings and names the Page only in the
+  // composer prompt, which Facebook shows when you post as that Page.
+  const headingNames = new Set([name, labelKey(`Hi ${rawName}`)]);
   const headings = Array.from(doc.querySelectorAll("h1, h2, [role='heading']"));
-  const named = name !== "" && headings.some((heading) => labelKey(heading.textContent ?? "") === name);
+  const prompt = labelKey(composerPrompt(rawName));
+  const named = name !== "" && (
+    headings.some((heading) => headingNames.has(labelKey(heading.textContent ?? "")))
+    || Array.from(doc.querySelectorAll("[role='textbox'][aria-label]")).some((box) => labelKey(box.getAttribute("aria-label") ?? "") === prompt)
+  );
   if (!named) {
     return [issue(
       "error",
@@ -225,6 +271,15 @@ function facebookAfter(draft: PlanDraft, pack: FacebookPack): void {
       controlId: control.id,
       message: `Attach the ${id === "profilePicture" ? "profile picture" : "cover photo"} yourself before commit.`,
     });
+  }
+
+  // City/Town is a typeahead on Facebook: typed text alone is not a city until a suggestion is
+  // picked, so a typed value would read back as written yet never save. Leave it to the person.
+  const city = draft.actions.find((action) => action.id === "city");
+  const cityEl = city ? draft.page.document.getElementById(city.controlId) : null;
+  if (city && cityEl?.getAttribute("role") === "combobox") {
+    draft.actions = draft.actions.filter((action) => action !== city);
+    draft.notes.push(`City/Town: pick "${String(city.value)}" from Facebook's suggestions yourself`);
   }
 
   const hoursPlanned = draft.actions.some((action) => action.id === "hoursMode");

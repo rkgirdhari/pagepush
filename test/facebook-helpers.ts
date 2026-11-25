@@ -1,5 +1,6 @@
-// Facebook fixtures built from the published flow and the d6cb DOM research, not from captured
-// Facebook markup. Phase 5 replaces them with sanitized captures of the logged-in views.
+// Synthetic Facebook fixtures from the published flow and the d6cb DOM research. They stay as
+// compact engine tests (create view, profile refusal, SPA moves). The sanitized Phase 5 captures
+// of the live views are in test/fixtures/facebook/ and are exercised by facebook-live.test.ts.
 import { load, wireTokens } from "./helpers.ts";
 
 export const PAGE_URL = "https://www.facebook.com/profile.php?id=61550000000001";

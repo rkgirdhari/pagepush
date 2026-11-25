@@ -1,0 +1,84 @@
+<!--
+  The Page's own profile (profile.php?id=…&sk=about…) while acting as the Page, with each About
+  editor open at once so one fixture covers them. Captured 2026-11-25 and rebuilt from sanitized
+  skeletons: labels, roles, maxlength values, and wrapping are as captured. Page name replaced by
+  the fictional "Northline Studio"; no ids, classes, URLs, tokens, or account details are kept.
+  Facts: "Manage Page" h1 with the Page name as h2; every editor wraps its input in a <label>;
+  Save is div[role=button][aria-label=Save], aria-disabled until something changes; City/Town is a
+  typeahead combobox; categories are a combobox with a listbox and "Selected values" chips.
+-->
+<div role="navigation" aria-label="Facebook">
+  <a role="link" aria-label="Business Dashboard" href="#">.</a>
+  <a role="link" aria-label="Ad Center" href="#">.</a>
+</div>
+<div role="navigation" aria-label="Page navigation">
+  <h1>Manage Page</h1>
+  <h2>Northline Studio</h2>
+  <a role="link" href="#">Business Dashboard</a>
+  <a role="link" href="#">Insights</a>
+  <a role="link" href="#">Settings</a>
+  <h2>More tools</h2>
+  <a role="link" href="#">Meta Business Suite</a>
+</div>
+<div role="main" aria-label="Page profile content">
+  <div role="button" tabindex="0" aria-label="Add cover photo">Add cover photo</div>
+  <div role="button" tabindex="0">Northline Studio</div>
+  <a role="link" aria-label="Business Dashboard" href="#">Business Dashboard</a>
+  <a role="link" aria-label="Edit profile" href="#">Edit</a>
+
+  <section id="fb-bio-editor">
+    <h2>Bio</h2>
+    <div role="button" tabindex="0" aria-label="Edit privacy. Sharing with Public." aria-disabled="true">Public</div>
+    <h2>Edit bio</h2>
+    <label><span>Introduce yourself</span><textarea id="fb-bio" maxlength="255" dir="ltr"></textarea></label>
+    <div role="button" tabindex="0" aria-label="Cancel">Cancel</div>
+    <div role="button" tabindex="0" aria-label="Save" aria-disabled="true" data-enables>Save</div>
+  </section>
+
+  <section id="fb-category-editor">
+    <h2>Category</h2>
+    <label data-widget>
+      <span>Categories</span>
+      <span role="list" aria-label="Selected values">
+        <span>Software Company<div role="button" tabindex="0" aria-label="Remove Software Company"></div></span>
+      </span>
+      <input id="fb-category" role="combobox" type="search" aria-label="Categories" aria-autocomplete="list" aria-expanded="false" aria-controls="fb-category-list" placeholder="">
+      <ul id="fb-category-list" role="listbox">
+        <li role="option" aria-selected="false">Consulting Agency</li>
+        <li role="option" aria-selected="false">Boat Rental</li>
+      </ul>
+    </label>
+    <span>1/3 categories</span>
+  </section>
+
+  <section id="fb-links-editor">
+    <h2>Links</h2>
+    <label><span>Link description</span><input type="text" maxlength="150"></label>
+    <label><span>Link</span><input id="fb-website" type="text"></label>
+    <div role="button" tabindex="0">Add link</div>
+  </section>
+
+  <section id="fb-phone-editor">
+    <h2>Phone</h2>
+    <div role="button" tabindex="0" aria-label="Country code, US+1" aria-haspopup="menu">US+1</div>
+    <label><span>Phone number</span><input id="fb-phone" type="text"></label>
+  </section>
+
+  <section id="fb-email-editor">
+    <h2>Email</h2>
+    <label><span>Email</span><input id="fb-email" type="text"></label>
+    <span>This email will display on your Page.</span>
+  </section>
+
+  <section id="fb-address-editor">
+    <h2>Address</h2>
+    <label><span>Address</span><input id="fb-address" type="text"></label>
+    <label><span>City/Town</span><input id="fb-city" role="combobox" type="search" aria-label="City/Town"></label>
+    <label><span>ZIP</span><input id="fb-zip" type="text" maxlength="12"></label>
+    <label><span>Neighborhood</span><input type="text"></label>
+    <div role="button" tabindex="0" aria-label="Cancel">Cancel</div>
+    <div role="button" tabindex="0" aria-label="Save" aria-disabled="true" data-enables id="fb-save">Save</div>
+  </section>
+  <h2>Hours</h2>
+  <span>Add your business address first before adding business hours</span>
+</div>

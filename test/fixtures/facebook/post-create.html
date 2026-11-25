@@ -1,0 +1,50 @@
+<!--
+  Facebook /post/create, loaded directly while acting as the Page. Captured 2026-11-25 with
+  scripts/capture-skeleton.js and rebuilt from the sanitized skeleton: roles, aria-labels,
+  contenteditable/Lexical markers, and nesting are as captured. The Page name is replaced by the
+  fictional "Northline Studio"; no ids, classes, URLs, tokens, or account details are kept.
+  Facts: no heading element names the composer; the region is role=main whose first text is
+  "Create post"; the Lexical textbox sits in role=form "Posts"; Post is outside that form and
+  aria-disabled until the composer has text. A hidden Notifications dialog is always in the DOM.
+-->
+<div role="banner">
+  <div role="navigation" aria-label="Facebook">
+    <a role="link" aria-label="Home" href="#">.</a>
+    <a role="link" aria-label="Pages" href="#">.</a>
+    <a role="link" aria-label="Business Dashboard" href="#">.</a>
+    <a role="link" aria-label="Ad Center" href="#">.</a>
+  </div>
+  <input role="combobox" type="search" aria-label="Search Facebook" placeholder="Search Facebook" aria-expanded="false">
+</div>
+<div role="dialog" aria-label="Notifications" hidden><h1>Notifications</h1></div>
+<div role="main">
+  <div><span>Create post</span></div>
+  <div role="form" aria-label="Posts">
+    <div role="button" tabindex="0">People</div>
+    <div role="button" tabindex="0">Location</div>
+    <div role="button" tabindex="0">Feeling/activity</div>
+    <div role="presentation"><span aria-hidden="true">What's on your mind, Northline Studio?</span>
+      <div id="fb-composer" role="textbox" contenteditable="true" data-lexical-editor="true" aria-label="What's on your mind, Northline Studio?"><p><br></p></div>
+    </div>
+    <div role="button" tabindex="0" aria-label="Emoji"></div>
+    <div role="button" tabindex="0">Add photos or videos</div>
+    <input type="file" accept="video/*,video/mp4" hidden>
+  </div>
+  <div role="button" tabindex="0">Post audience</div>
+  <div>
+    <span id="fb-ai-label-title">Add AI label</span>
+    <div role="switch" aria-checked="false" aria-labelledby="fb-ai-label-title">
+      <input id="fb-ai-label" type="checkbox" role="switch" aria-checked="false" aria-labelledby="fb-ai-label-title">
+    </div>
+  </div>
+  <div>
+    <span id="fb-boost-title">Boost post</span>
+    <div role="switch" aria-checked="false" aria-labelledby="fb-boost-title">
+      <input id="fb-boost" type="checkbox" role="switch" aria-checked="false" aria-labelledby="fb-boost-title">
+    </div>
+  </div>
+  <div role="button" tabindex="0" aria-label="Save as draft" aria-disabled="true"></div>
+  <div role="button" tabindex="0" aria-disabled="true">Schedule</div>
+  <div role="button" tabindex="0" aria-label="Post" aria-disabled="true" id="fb-post"><div role="none">Post</div></div>
+  <div role="complementary" aria-label="Post Preview"><span>Preview</span><span>Northline Studio</span></div>
+</div>
