@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
-
 import type { PlanIssue } from "./types.ts";
+import { sha256Hex } from "./sha256.ts";
 
 export function issue(
   level: PlanIssue["level"],
@@ -98,7 +97,7 @@ export function stableStringify(value: unknown): string {
 }
 
 export function sha256(value: unknown): string {
-  return createHash("sha256").update(stableStringify(value)).digest("hex");
+  return sha256Hex(stableStringify(value));
 }
 
 export function dedupe(values: string[]): string[] {

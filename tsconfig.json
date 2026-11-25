@@ -10,7 +10,7 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
-    "types": []
+    "types": ["chrome"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page Push</title>
+  <style>
+    :root {
+      --bg: #f8fafc; --panel: #ffffff; --text: #0f172a; --muted: #475569; --line: #cbd5e1;
+      --accent: #b45309; --accent-text: #ffffff; --bad: #b91c1c; --warn: #a16207; --good: #15803d;
+      color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1120; --panel: #111827; --text: #e5e7eb; --muted: #94a3b8; --line: #334155;
+        --accent: #f59e0b; --accent-text: #111827; --bad: #f87171; --warn: #facc15; --good: #4ade80;
+      }
+    }
+    body { margin: 0; padding: 12px; font: 13px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    h1 { font-size: 15px; margin: 0 0 4px; }
+    p.note { margin: 0 0 10px; color: var(--muted); }
+    textarea { width: 100%; min-height: 180px; box-sizing: border-box; font: 12px/1.4 ui-monospace, monospace;
+      background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+    .row { display: flex; gap: 6px; margin: 8px 0; }
+    button { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel);
+      color: var(--text); font-weight: 600; cursor: pointer; }
+    button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    #status { padding: 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); margin: 8px 0; }
+    #status[data-tone="bad"] { color: var(--bad); }
+    #status[data-tone="good"] { color: var(--good); }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 8px 0; }
+    section h2 { font-size: 12px; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    ul { margin: 0; padding-left: 18px; }
+    li.error { color: var(--bad); }
+    li.warning { color: var(--warn); }
+    code { font-size: 11px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>Page Push</h1>
+  <p class="note">Open your Facebook Business Page view in the active tab. Nothing is saved or posted until you click Approve &amp; Commit.</p>
+  <label for="pack">Project pack (JSON)</label>
+  <textarea id="pack" spellcheck="false"></textarea>
+  <div class="row">
+    <button id="plan">Plan this page</button>
+    <button id="draft" disabled>Draft</button>
+  </div>
+  <div class="row">
+    <button id="commit" class="primary" disabled>Approve &amp; Commit</button>
+  </div>
+  <div id="status" role="status" aria-live="polite">No plan yet.</div>
+  <div id="plan-view"></div>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

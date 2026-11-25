@@ -3,3 +3,4 @@ node_modules/
 models/weights/
 *.gguf
 native/candle-drafter/target/
+dist/

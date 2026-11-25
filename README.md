@@ -30,6 +30,18 @@ Files the browser will not accept from a script (thumbnails, the AppSumo hero, s
 
 AppSumo also documents an official MCP at `https://appsumo.com/mcp/` (`update_submission`). `writesTo` on each field is the path that tool expects. This package fills the editor that is already open. It does not call the MCP.
 
+## Build the extension
+
+```bash
+npm install
+npm run build        # writes the unpacked MV3 extension to dist/
+npm run verify       # typecheck, tests, then build
+```
+
+In Chrome, open `chrome://extensions`, turn on Developer mode, click **Load unpacked**, and choose `dist/`. The root `manifest.json` is the source; its paths are relative to `dist/`, so load `dist/`, not the repository root.
+
+The bundles start at `src/extension/` and import the engine through `src/browser.ts`. `src/index.ts` (which also exports the Node-only Candle runner) is for Node and tests. The build fails if a bundle reaches a `node:` module, `src/draft/candle.ts`, `native/`, or `daemon/`.
+
 ## Binding
 
 Controls are found by their visible label, the same strings Devpost's help center and the AppSumo listing brief publish. Devpost does not publish input `name` attributes, so the shim does not depend on them. An unknown required question on a hackathon page blocks that page until the pack has an answer. An optional unknown question is left alone and named in `plan.warnings`.

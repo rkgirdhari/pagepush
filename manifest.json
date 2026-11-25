@@ -21,10 +21,10 @@
     }
   },
   "side_panel": {
-    "default_path": "src/sidepanel.html"
+    "default_path": "sidepanel.html"
   },
   "background": {
-    "service_worker": "src/background.js"
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -32,7 +32,7 @@
         "https://*.facebook.com/*"
       ],
       "js": [
-        "src/content.js"
+        "content.js"
       ],
       "run_at": "document_idle"
     }

@@ -8,12 +8,17 @@
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "model:pull": "node scripts/pull-qwen3.mjs",
-    "model:build": "rustup run stable cargo build --release --manifest-path native/candle-drafter/Cargo.toml"
+    "model:build": "rustup run stable cargo build --release --manifest-path native/candle-drafter/Cargo.toml",
+    "build": "node scripts/build.mjs",
+    "build:watch": "node scripts/build.mjs --watch",
+    "verify": "npm run typecheck && npm test && npm run build"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
+    "@types/chrome": "0.3.7",
+    "esbuild": "0.28.2",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2"
   }
