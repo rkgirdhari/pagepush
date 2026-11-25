@@ -1,61 +1,106 @@
 # Page Push Privacy Policy
 
-_Status: draft for v1.0.0. Finalized in Phase 7 once the receipt export and Clear All Local Data controls ship._
-_Last updated: 2026-11-25_
+_Version 1.0.0. Last updated: 2026-11-25._
 
-Page Push ("the extension") is a manual-assist browser extension. It helps a person fill in the setup and settings forms of a Facebook Business Page that they already administer and have open in their own browser. Every change it makes is a draft until that person reviews it and clicks **Approve & Commit** in the side panel.
+Page Push ("the extension") is a manual-assist browser extension. It helps a person fill in the
+setup and settings forms of a Facebook Business Page that they already administer and have open in
+their own browser. Every change it makes is a draft until that person reviews it on the page and
+clicks **Approve & Commit** in the side panel.
 
-## What the extension stores
+Page Push has no server. The developer receives no data from it.
 
-Page Push has no backend server. Everything below stays on your device, in the browser's local extension storage (`chrome.storage.local`). It is never written to `chrome.storage.sync` and never sent to us.
+## What the extension stores, and where
 
-| Data | Where it lives | Why |
-| --- | --- | --- |
-| Project packs (Page name, category, bio, contact details, hours, call-to-action, launch post text) | `chrome.storage.local` | The values you want drafted into the Page form |
-| The active plan and its hash | `chrome.storage.local` and the open tab's memory | Lets Approve & Commit check that the page still matches what you reviewed |
-| Sprint receipts (plan hash, timestamps, tier, page URL, field ids drafted and committed, media checklist status) | `chrome.storage.local`, and a JSON file only when you click export | A delivery record for the person who ran the sprint |
-| Side panel preferences (including the chosen local Ollama model name) | `chrome.storage.local` | Remembers your choices between sessions |
+Everything below stays on your device in the browser's local extension storage
+(`chrome.storage.local`). Page Push never uses `chrome.storage.sync`, so nothing is copied to other
+devices or to your Google account.
+
+| Data | Why |
+| --- | --- |
+| The client pack: Page name, categories, bio, website, phone, email, address, city, ZIP, hours, action button, launch post text, and whether the profile and cover photos are required | The values you want drafted into the Facebook form |
+| The current plan, its hash, and per-field progress (drafted / committed, with times and the page address) | Lets Approve & Commit check that the page still matches what you reviewed, and resume after the panel reloads |
+| The pre-flight checklist (page reviewed, profile picture and cover photo uploaded) | Gates Approve & Commit |
+| Sprint receipt entries: for each Approve & Commit, the plan hash, the time you approved, the tier, the Facebook page address without tracking parameters, the view type, which fields were drafted and committed (by name), the checklist as ticked, and any refusal reason | A delivery record for the client; see "Sprint receipts" |
+| The name of the local Ollama model you chose, if you use Ollama | Remembers your choice |
 
 ## What the extension never does
 
-- It does not read, store, or fill passwords, two-factor codes, or other sign-in credentials. You sign in to Facebook yourself.
-- It does not post to personal profiles or timelines. It only acts on Facebook Business Page setup and settings views.
-- It does not publish, save, or submit anything without your click on **Approve & Commit** for that exact plan.
-- It does not run on a schedule or in the background, and it does not mimic human typing or hide that a tool is filling the form.
-- It does not upload images for you. Profile pictures and cover photos are attached by you; the side panel only tracks a checklist.
-- It does not send analytics, telemetry, crash reports, or page content to any server. The only network address it calls on its own behalf is a local Ollama on your own computer, and only when you click an Ollama button (see below).
-- It does not sell or share data with third parties.
+- It does not read, store, or fill passwords, two-factor codes, session cookies, or access tokens.
+  You sign in to Facebook yourself. Packs that look like they hold a credential are refused.
+- It does not post to personal profiles or timelines. It refuses views that do not show a Business
+  Page you manage, except Facebook's own Page creation screen.
+- It does not create, save, publish, or submit anything without your click on **Approve & Commit**
+  for that exact plan. One click approves one commit; it cannot be replayed.
+- It does not run on a schedule or in the background, and it does not imitate human typing,
+  randomize its timing, or hide that a tool is filling the form.
+- It does not upload images. You attach profile pictures and cover photos yourself.
+- It does not send analytics, telemetry, crash reports, page content, or pack data to any server.
+- It does not sell, rent, or share data with anyone.
+- It does not load or run remote code.
 
 ## What the extension reads
 
-On `facebook.com` pages, the content script reads the visible form labels, field values, and option lists of the page you have open, so it can match them to your project pack and verify what was drafted. It does not read other tabs, your browsing history, or messages.
+On `facebook.com` pages, the content script reads the visible form labels, field values, buttons,
+and option lists of the page you have open, so it can match them to your pack, verify what was
+drafted, and notice if a field changes after drafting. It does not read other tabs, your browsing
+history, messages, or friends lists, and it keeps none of the page content beyond the plan and
+progress described above.
 
-When you click **Approve & Commit**, the values you approved are entered into Facebook's own form in your tab. Facebook then handles them under its own [Privacy Policy](https://www.facebook.com/privacy/policy/).
-
-## Optional local copy drafter
-
-If you install the optional local drafter (a separate program that runs a small language model on your computer), the side panel can send the facts you typed to that program through Chrome's native messaging. The program runs on your computer, does not use the network, and returns suggested copy that you review before it goes into a pack. Facts that look like keys, passwords, or codes are not sent. If the drafter is not installed, Page Push uses its built-in, rule-based fallback and nothing leaves the browser.
+When you click **Approve & Commit**, the values you approved are already in Facebook's own form in
+your tab, and Page Push clicks Facebook's Save, Post, or Create a Page button once. Facebook then
+handles that data under its own [Privacy Policy](https://www.facebook.com/privacy/policy/).
 
 ## Optional local Ollama
 
-If you run [Ollama](https://ollama.com) on your computer, the side panel can draft the Page bio and launch post with a model there (by default `qwen3`). This happens only when you click **Check / Load Model** or **Draft Copy with Ollama**. The side panel then talks to `http://localhost:11434` on your own machine: it lists installed models, downloads the chosen model through Ollama if you asked it to load one that is missing (Ollama fetches it from its own model library), loads it into memory, and sends the pack facts (Page name, categories, bio, launch notes, website, city, action button, hours) for drafting. Nothing is sent to Page Push or any other server. Packs that look like they hold a password, key, or token are not sent. The drafted copy goes into your pack for you to read and edit; it reaches Facebook only after you plan the view, draft it, and click **Approve & Commit**. With Ollama stopped or not installed, **Draft from facts (offline)** builds the copy from your pack with no model at all.
+If you run [Ollama](https://ollama.com) on your computer, the side panel can draft the Page bio and
+launch post with a model there (by default `qwen3`). It does so only when you click **Check / Load
+Model** or **Draft Copy with Ollama**, and only over `http://localhost:11434` (or `127.0.0.1`) on
+your own machine:
+
+- **Check / Load Model** asks Ollama for its version and installed models, asks Ollama to download
+  the chosen model if it is missing (Ollama fetches it from its own model library), and loads it.
+- **Draft Copy with Ollama** sends these pack facts to the local model: Page name, categories, bio,
+  launch notes, website, city, action button, and hours. Phone, email, and street address are not
+  sent. A pack that looks like it holds a password, key, or token is not sent at all.
+
+The drafted copy goes into your pack for you to read and edit. It reaches Facebook only after you
+plan the view, draft it, and click **Approve & Commit**. With Ollama stopped or not installed,
+**Draft from facts (offline)** builds the copy from your pack with no model and no network.
+
+## Sprint receipts
+
+Each Approve & Commit adds an entry to a local sprint receipt. **Download sprint receipt** saves it
+as a JSON file on your computer; nothing is sent anywhere. The receipt names fields but does not
+contain their values, and it carries a SHA-256 hash of its own contents so later edits can be
+detected. Exported files are ordinary files; you decide who receives them.
 
 ## Permissions and why
 
-- `sidePanel`: shows the pack editor, plan preview, and Approve & Commit controls.
-- `storage`: keeps packs, plans, and receipts in local extension storage.
-- Host access to `https://*.facebook.com/*`: lets the content script read and fill the Business Page form you have open.
-- Host access to `http://localhost:11434/*` and `http://127.0.0.1:11434/*`: lets the side panel reach a local Ollama when you click an Ollama button. It is your own computer, not a remote server.
-- `nativeMessaging` (only if the optional drafter ships in this build): talks to the local drafter program on your computer.
+- `sidePanel`: shows the pack editor, plan inspector, checklist, Approve & Commit, and receipt export.
+- `storage`: keeps the data listed above in `chrome.storage.local`.
+- Host access to `https://*.facebook.com/*`: lets the content script read and fill the Business Page
+  form you have open. It runs only on Facebook.
+- Host access to `http://localhost:11434/*` and `http://127.0.0.1:11434/*`: lets the side panel reach
+  a local Ollama on your own computer when you click an Ollama button. These are not remote servers.
 
 ## Deleting your data
 
-Click **Clear All Local Data** in the side panel to erase everything Page Push stored. Uninstalling the extension also removes its local storage. Exported receipt files are ordinary files on your computer; delete them like any other file.
+Click **Clear All Local Data** in the side panel, then click it again to confirm. That erases
+everything Page Push stored in this browser: packs, plans, progress, the checklist, receipt entries,
+and settings. Uninstalling the extension also removes its storage. Downloaded receipt files are
+ordinary files on your computer; delete them like any other file. Models you downloaded with Ollama
+are managed by Ollama (`ollama rm <model>`).
+
+## Children
+
+Page Push is a business tool and is not directed at children.
 
 ## Changes to this policy
 
-This document and its "Last updated" date change whenever Page Push's data handling changes.
+This document and its "Last updated" date change whenever Page Push's data handling changes. The
+change is also listed in `CHANGELOG.md`.
 
 ## Contact
 
-Questions about this policy can go to the developer contact listed on the Chrome Web Store page for Page Push.
+Questions about this policy can go to the developer contact listed on the Chrome Web Store page for
+Page Push.

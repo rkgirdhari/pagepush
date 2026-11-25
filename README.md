@@ -35,7 +35,7 @@ AppSumo also documents an official MCP at `https://appsumo.com/mcp/` (`update_su
 ```bash
 npm install
 npm run build        # writes the unpacked MV3 extension to dist/
-npm run verify       # typecheck, tests, then build
+npm run verify       # typecheck, compliance lint, tests, then build
 ```
 
 In Chrome, open `chrome://extensions`, turn on Developer mode, click **Load unpacked**, and choose `dist/`. The root `manifest.json` is the source; its paths are relative to `dist/`, so load `dist/`, not the repository root.
@@ -93,6 +93,16 @@ Check the label strings against a live logged-in page before using a plan on a r
 `executeCommit` still refuses the whole commit on the first failure. `CommitRefused.applied` lists commit actions that already ran, so a later failure still tells you which invites went out. Fix the page before tapping confirm again.
 
 If AppSumo fields come back unconfirmed, `recoverListing` returns the same markdown as `renderListingPaste` plus a `paste-fallback` warning. `renderDevpostPaste` is the hackathon copy block for the same situation. Neither one clicks submit.
+
+## Sprint receipts and local data
+
+Every Approve & Commit adds an entry to a local sprint receipt: plan hash, approval time, tier, the
+Facebook view (tracking parameters stripped), drafted and committed field names, and the checklist.
+**Download sprint receipt (JSON)** saves it with a SHA-256 over its own body (`verifySprintReceipt`
+in `src/extension/receipt.ts` checks it). Receipts hold field names, never values. **Clear All
+Local Data** (two clicks) erases `chrome.storage.local`; `chrome.storage.sync` is never used, and
+`npm run lint` fails the build if it ever is. Store disclosures are in
+[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md).
 
 ## Bio and launch-post drafting in the side panel
 

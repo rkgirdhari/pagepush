@@ -26,6 +26,7 @@ import {
   initialState,
   invalidate,
   recordCommit,
+  recordCommitRefused,
   recordDraft,
   recordDrift,
   startSession,
@@ -34,6 +35,8 @@ import {
 } from "./panel-state.ts";
 import { clearAll, load, saver } from "./storage.ts";
 import { wireCopyPanel } from "./copy-panel.ts";
+import { buildSprintReceipt, receiptFileName } from "./receipt.ts";
+import manifest from "../../manifest.json" with { type: "json" };
 
 const FACEBOOK_TAB = /^https:\/\/([a-z0-9-]+\.)*facebook\.com\//i;
 const RETRIES = 4;
@@ -235,6 +238,8 @@ async function draft(): Promise<void> {
 async function approveAndCommit(): Promise<void> {
   const session = state.session;
   if (!session || busy || !commitReadiness(state, { activeTabId }).ok) return;
+  // The moment the person approved this plan hash; it goes into the sprint receipt.
+  const approvedAt = new Date();
   busy = true;
   render();
   try {
@@ -247,12 +252,12 @@ async function approveAndCommit(): Promise<void> {
     }
     const result = await send({ type: "pagepush:commit", planHash: session.plan.planHash }, session.tabId);
     if (failure(result) || "error" in result || !result.reply.ok) {
-      if (!("error" in result) && !result.reply.ok && result.reply.applied?.length) {
-        commitState(invalidate(recordCommit(state), "Part of this commit ran. Check the page before planning again."));
+      if (!("error" in result) && !result.reply.ok) {
+        commitState(recordCommitRefused(state, { code: result.reply.code, message: result.reply.message, applied: result.reply.applied, approvedAt }));
       }
       return;
     }
-    commitState(recordCommit(state));
+    commitState(recordCommit(state, new Date(), approvedAt));
     const steps = session.plan.actions.filter((action) => action.phase === "commit").map((action) => action.label);
     setBanner({ tone: "good", title: `Committed: ${steps.join(", ")}.`, detail: "When Facebook shows the next screen, it is planned automatically." });
   } finally {
@@ -276,7 +281,29 @@ function render(options: { renderForm?: boolean } = {}): void {
   renderChecklist();
   renderProgress();
   renderPaste();
+  renderReceipts();
   renderControls();
+}
+
+function renderReceipts(): void {
+  const entries = state.receipts ?? [];
+  const committed = entries.filter((entry) => entry.outcome === "committed").length;
+  const other = entries.length - committed;
+  $("receipt-summary").textContent = entries.length
+    ? `${entries.length} approval${entries.length === 1 ? "" : "s"} recorded: ${committed} committed${other ? `, ${other} refused or partial` : ""}.`
+    : "No approvals yet. Each Approve & Commit is recorded here for the client.";
+  $<HTMLButtonElement>("receipt-download").disabled = entries.length === 0;
+}
+
+/** Saves a JSON file through a data: link, so no downloads permission is needed. */
+function downloadJson(fileName: string, value: unknown): void {
+  const link = document.createElement("a");
+  link.href = `data:application/json;charset=utf-8,${encodeURIComponent(`${JSON.stringify(value, null, 2)}\n`)}`;
+  link.download = fileName;
+  link.hidden = true;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function renderForm(): void {
@@ -559,6 +586,12 @@ $("export").addEventListener("click", () => {
 planButton.addEventListener("click", () => { void planView(); });
 draftButton.addEventListener("click", () => { void draft(); });
 commitButton.addEventListener("click", () => { void approveAndCommit(); });
+$("receipt-download").addEventListener("click", () => {
+  if (!(state.receipts ?? []).length) return;
+  const receipt = buildSprintReceipt({ pack: state.pack, entries: state.receipts, extensionVersion: manifest.version });
+  downloadJson(receiptFileName(receipt), receipt);
+  setBanner({ tone: "good", title: "Sprint receipt downloaded.", detail: `${receipt.totals.approvals} approval(s), SHA-256 ${receipt.sha256.slice(0, 12)}…` });
+});
 
 for (const [id, key] of [["check-reviewed", "reviewedPage"], ["check-profile", "profilePicture"], ["check-cover", "coverPhoto"]] as const) {
   $<HTMLInputElement>(id).addEventListener("change", (event) => {
@@ -580,7 +613,7 @@ $("clear").addEventListener("click", async () => {
   await clearAll(chrome.storage.local);
   state = initialState();
   render({ renderForm: true });
-  setBanner({ tone: "good", title: "Local data cleared.", detail: "Packs, plans, progress, and the checklist were erased from this browser." });
+  setBanner({ tone: "good", title: "Local data cleared.", detail: "Packs, plans, progress, the checklist, sprint receipts, and settings were erased from this browser. Nothing was ever synced to other devices." });
 });
 
 chrome.tabs.onActivated.addListener(() => { void refreshActiveTab().then(() => render()); });
@@ -647,7 +680,7 @@ wireCopyPanel({
 async function start(): Promise<void> {
   buildStaticControls();
   const saved = await load(chrome.storage.local);
-  if (saved) state = { pack: saved.pack, checklist: saved.checklist, progress: saved.progress, session: saved.session };
+  if (saved) state = { pack: saved.pack, checklist: saved.checklist, progress: saved.progress, session: saved.session, receipts: saved.receipts ?? [] };
   await refreshActiveTab();
   render({ renderForm: true });
   const session = state.session;

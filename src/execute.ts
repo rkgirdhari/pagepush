@@ -85,6 +85,11 @@ export async function executeCommit(
       refuse("stale", `${action.label} no longer matches the confirmed plan.`, [], action.id);
     }
   }
+  // A captcha can appear after planning (Facebook challenges on submit-like activity). Check the
+  // live page too, not only the gates recorded at plan time, so an unsolved one always blocks.
+  if (!captchaCleared(doc) && !plan.gates.some((gate) => gate.code === "captcha")) {
+    refuse("captcha", "Solve the captcha on the page yourself, then click Approve & Commit again.");
+  }
   for (const gate of plan.gates) {
     if (gate.code === "captcha" && !captchaCleared(doc)) {
       refuse("captcha", gate.message, [], gate.fieldId);

@@ -2,6 +2,7 @@
 // Pure functions so the approval rules are unit-tested without Chrome.
 import type { ApplyResult, FacebookPack, FillPlan } from "../browser.ts";
 import { fieldById, packFingerprint, starterPack } from "./packs.ts";
+import { receiptEntry, type ReceiptEntry } from "./receipt.ts";
 
 export interface Checklist {
   /** The operator read every drafted field on the Facebook page. Reset on every draft. */
@@ -37,6 +38,8 @@ export interface PanelState {
   checklist: Checklist;
   progress: ProgressEntry[];
   session: Session | null;
+  /** One audit entry per Approve & Commit click, exported as the sprint receipt. */
+  receipts: ReceiptEntry[];
 }
 
 export interface Context {
@@ -55,6 +58,7 @@ export function initialState(): PanelState {
     checklist: { reviewedPage: false, profilePicture: false, coverPhoto: false },
     progress: [],
     session: null,
+    receipts: [],
   };
 }
 
@@ -102,13 +106,19 @@ export function recordDrift(state: PanelState, planHash: string, fields: string[
   return { ...state, session: { ...session, drift: [...new Set([...session.drift, ...fields])] } };
 }
 
-export function recordCommit(state: PanelState, at = new Date()): PanelState {
+/**
+ * A commit that ran. `approvedAt` is when the person clicked Approve & Commit; it goes into the
+ * sprint receipt with the drafted and committed fields and the checklist as ticked.
+ */
+export function recordCommit(state: PanelState, at = new Date(), approvedAt = at): PanelState {
   const session = state.session;
   if (!session) return state;
   const stamp = at.toISOString();
   const done = session.plan.actions.filter((action) => action.phase === "commit" || session.drafted?.applied.includes(action.id));
+  const receipt = receiptEntry({ session, pack: state.pack, checklist: state.checklist, approvedAt, finishedAt: at, outcome: "committed" });
   return {
     ...state,
+    receipts: [...(state.receipts ?? []), receipt],
     session: { ...session, committedAt: stamp },
     progress: mergeProgress(state.progress, done.map((action) => ({
       fieldId: action.id,
@@ -119,6 +129,47 @@ export function recordCommit(state: PanelState, at = new Date()): PanelState {
       at: stamp,
     }))),
   };
+}
+
+/**
+ * An approval that did not fully commit. With nothing applied, the plan and its draft still stand
+ * (the person can fix the page and approve again). With some steps applied, those are recorded as
+ * committed and the plan is closed, since the page no longer matches what was approved.
+ */
+export function recordCommitRefused(
+  state: PanelState,
+  input: { code: string; message: string; applied?: string[]; approvedAt: Date; at?: Date },
+): PanelState {
+  const session = state.session;
+  if (!session) return state;
+  const at = input.at ?? new Date();
+  const applied = input.applied ?? [];
+  const outcome = applied.length ? "partial" : "refused";
+  const receipt = receiptEntry({
+    session,
+    pack: state.pack,
+    checklist: state.checklist,
+    approvedAt: input.approvedAt,
+    finishedAt: at,
+    outcome,
+    committedIds: applied,
+    refusal: { code: input.code, message: input.message },
+  });
+  const next: PanelState = { ...state, receipts: [...(state.receipts ?? []), receipt] };
+  if (outcome === "refused") return next;
+  const stamp = at.toISOString();
+  const done = session.plan.actions.filter((action) => applied.includes(action.id) || session.drafted?.applied.includes(action.id));
+  return invalidate({
+    ...next,
+    progress: mergeProgress(state.progress, done.map((action) => ({
+      fieldId: action.id,
+      label: action.label,
+      status: "committed" as const,
+      url: session.url,
+      planHash: session.plan.planHash,
+      at: stamp,
+    }))),
+  }, "Part of this commit ran. Check the page before planning again.");
 }
 
 /** One entry per field: committed beats drafted, newer beats older. */

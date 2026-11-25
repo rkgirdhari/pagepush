@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Human-confirmed form fills for Devpost hackathon submissions and AppSumo partner listings.",
+  "description": "Manual-assist form fill for Facebook Business Page setup. Every draft is reviewed and approved by a person before anything is saved or posted.",
   "scripts": {
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
@@ -11,7 +11,8 @@
     "model:build": "rustup run stable cargo build --release --manifest-path native/candle-drafter/Cargo.toml",
     "build": "node scripts/build.mjs",
     "build:watch": "node scripts/build.mjs --watch",
-    "verify": "npm run typecheck && npm test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build",
+    "lint": "node scripts/lint.mjs"
   },
   "engines": {
     "node": ">=22"

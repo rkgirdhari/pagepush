@@ -2,6 +2,7 @@
 // ever written to chrome.storage.sync, and nothing leaves the browser.
 import type { FacebookPack } from "../browser.ts";
 import type { Checklist, PanelState, ProgressEntry, Session } from "./panel-state.ts";
+import type { ReceiptEntry } from "./receipt.ts";
 
 export const STORAGE_KEY = "pagepush.v1";
 
@@ -19,6 +20,8 @@ export interface Saved {
   progress: ProgressEntry[];
   /** The last plan, kept so the panel can resume it after a reload if the tab still holds it. */
   session: Session | null;
+  /** Sprint receipt entries, one per Approve & Commit. Older saves without it load as empty. */
+  receipts?: ReceiptEntry[];
   savedAt: string;
 }
 
@@ -29,6 +32,7 @@ export function toSaved(state: PanelState, at = new Date()): Saved {
     checklist: state.checklist,
     progress: state.progress,
     session: state.session,
+    receipts: state.receipts ?? [],
     savedAt: at.toISOString(),
   };
 }
