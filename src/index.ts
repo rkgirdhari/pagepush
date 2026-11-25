@@ -31,3 +31,5 @@ export {
 } from "./shims/appsumo.ts";
 export type { AppSumoPack } from "./shims/appsumo.ts";
 export type { ApplyResult, ConfirmToken, FillPlan, PlanIssue } from "./types.ts";
+export { draftFacebookCopy, facebookFacts, offlineFacebookCopy } from "./draft/facebook-copy.ts";
+export { checkAndLoad, ollamaRunner, ollamaStatus, pullModel, warmModel } from "./draft/ollama.ts";

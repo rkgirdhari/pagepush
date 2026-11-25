@@ -46,7 +46,7 @@ interface Harness {
   banner(): string;
 }
 
-async function harness(options: { pageView?: "page" | "profile" } = {}): Promise<Harness> {
+async function harness(options: { pageView?: "page" | "profile"; fetch?: (url: string, init?: { method?: string; body?: string }) => Promise<unknown> } = {}): Promise<Harness> {
   const page = facebookDoc({ view: options.pageView ?? "page" });
   const controller = createController({ document: page, location: { href: PAGE_URL }, notify: () => undefined, watchDialogs: false });
   const window = new Window({ url: "chrome-extension://pagepush/sidepanel.html" });
@@ -56,6 +56,8 @@ async function harness(options: { pageView?: "page" | "profile" } = {}): Promise
   window.document.head.innerHTML = head;
   window.document.body.innerHTML = body;
   const panel = window.document as unknown as Document;
+  // No real network in tests: Ollama is "not running" unless a test scripts it.
+  (window as unknown as { fetch: unknown }).fetch = options.fetch ?? (async () => { throw new TypeError("Failed to fetch"); });
 
   const local: Record<string, unknown> = {};
   let tab: { id: number; url: string; active: boolean } | null = { id: TAB, url: PAGE_URL, active: true };
@@ -266,4 +268,66 @@ test("Clear All Local Data needs a second click and then erases everything", asy
   assert.deepEqual(h.local, {});
   assert.equal((h.panel.getElementById("page-name") as HTMLInputElement).value, "");
   assert.match(h.banner(), /Local data cleared/);
+});
+
+function ollamaStub(content: string) {
+  const calls: string[] = [];
+  const reply = (status: number, json: unknown) => ({ ok: status < 300, status, json: async () => json, text: async () => JSON.stringify(json), body: null });
+  const fetch = async (url: string, init?: { method?: string; body?: string }) => {
+    const path = new URL(url).pathname;
+    calls.push(`${init?.method ?? "GET"} ${path}`);
+    if (path === "/api/version") return reply(200, { version: "0.12.0" });
+    if (path === "/api/tags") return reply(200, { models: [{ name: "qwen3:latest" }] });
+    if (path === "/api/generate") return reply(200, { done: true });
+    if (path === "/api/chat") return reply(200, { message: { content } });
+    return reply(404, {});
+  };
+  return { fetch, calls };
+}
+
+test("Draft from facts works with Ollama stopped, fills the pack for review, and can be undone", async () => {
+  const h = await harness();
+  fillLaunchPack(h);
+  h.type("bio", "");
+  h.type("launch-post", "");
+  await h.click("offline-draft");
+  const bio = (h.panel.getElementById("bio") as HTMLTextAreaElement).value;
+  assert.equal(bio, "Northline Studio: Software Company in Portland, Oregon. https://northline.example");
+  assert.match((h.panel.getElementById("launch-post") as HTMLTextAreaElement).value, /^Northline Studio is now on Facebook\.\n\n/);
+  assert.match(h.banner(), /Read the drafted copy before planning/);
+  assert.match(h.panel.getElementById("ollama-status")!.textContent ?? "", /offline/);
+
+  await h.click("copy-undo");
+  assert.equal((h.panel.getElementById("bio") as HTMLTextAreaElement).value, "");
+  assert.equal((h.panel.getElementById("launch-post") as HTMLTextAreaElement).value, "");
+});
+
+test("Draft Copy with Ollama when Ollama is not running says so and leaves the pack alone", async () => {
+  const h = await harness();
+  fillLaunchPack(h);
+  await h.click("ollama-draft");
+  assert.match(h.panel.getElementById("ollama-status")!.textContent ?? "", /not reachable at http:\/\/localhost:11434/);
+  assert.equal((h.panel.getElementById("bio") as HTMLTextAreaElement).value, "Retainer-hour tracking for small agencies.");
+  assert.match(h.banner(), /offline draft still works/);
+});
+
+test("Check / Load Model then Draft Copy with Ollama fills the pack, and a plan made earlier must be redone", async () => {
+  const bio = "Northline Studio: retainer-hour tracking for small agencies in Portland, Oregon.";
+  const { fetch, calls } = ollamaStub(JSON.stringify({ bio, launchPost: "Northline Studio is open. Book now: https://northline.example/book" }));
+  const h = await harness({ fetch });
+  fillLaunchPack(h);
+  await h.click("plan");
+  assert.equal(disabled(h, "draft"), false, "planned before drafting copy");
+
+  await h.click("ollama-load");
+  assert.match(h.panel.getElementById("ollama-status")!.textContent ?? "", /^Ready: qwen3:latest \(Ollama 0\.12\.0\)/);
+  assert.deepEqual(calls, ["GET /api/version", "GET /api/tags", "POST /api/generate"]);
+
+  await h.click("ollama-draft");
+  assert.equal((h.panel.getElementById("bio") as HTMLTextAreaElement).value, bio);
+  assert.match(h.panel.getElementById("ollama-status")!.textContent ?? "", /Drafted with qwen3:latest/);
+  assert.equal(calls.at(-1), "POST /api/chat");
+  assert.equal(disabled(h, "draft"), true, "the earlier plan no longer matches the pack");
+  assert.equal(disabled(h, "commit"), true);
+  assert.ok(Array.from(h.panel.querySelectorAll("#reasons li")).some((li) => /pack changed after planning/i.test(li.textContent ?? "")));
 });

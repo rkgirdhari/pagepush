@@ -14,7 +14,7 @@ export interface CopyField {
 }
 
 export interface DraftInput {
-  platform: "devpost" | "appsumo";
+  platform: "devpost" | "appsumo" | "facebook";
   facts: string;
   fields: CopyField[];
 }
@@ -34,7 +34,10 @@ export interface DraftOutcome {
   trace: TraceEvent[];
 }
 
-const BANNED = (appsumoSchema.rules?.voice as { banned?: string[] } | undefined)?.banned ?? [];
+/** Read on use, not at import, so bundles that never draft AppSumo copy do not carry its schema. */
+function banned(): string[] {
+  return (appsumoSchema.rules?.voice as { banned?: string[] } | undefined)?.banned ?? [];
+}
 const SECRET = /private key|begin [a-z ]*private|sk_live_|sk_test_|api[_ -]?key|redemption code/i;
 
 export async function draftCopy(input: DraftInput, runner: CopyRunner): Promise<DraftOutcome> {
@@ -113,7 +116,7 @@ export async function draftCopy(input: DraftInput, runner: CopyRunner): Promise<
 
 function systemPrompt(platform: DraftInput["platform"]): string {
   const voice = platform === "appsumo"
-    ? ` Do not use these words: ${BANNED.join(", ")}.`
+    ? ` Do not use these words: ${banned().join(", ")}.`
     : "";
   return [
     "You fill form copy a person will read before anything is submitted.",
@@ -138,7 +141,7 @@ function userPrompt(input: DraftInput): string {
   return `Facts (the only source of names, numbers, and links):\n${input.facts.trim()}\n\nReturn a JSON object with these keys:\n${lines.join("\n")}`;
 }
 
-function acceptField(
+export function acceptField(
   platform: DraftInput["platform"],
   facts: string,
   field: CopyField,
@@ -176,10 +179,10 @@ function rejectText(
   if (minWords != null && wordCount(text) < minWords) return "words";
   const leak = leaked(text, facts);
   if (leak) return leak;
-  if (ungrounded(text, facts)) return "grounding";
+  if (ungrounded(text, facts, platform === "facebook" ? FACEBOOK_VOCABULARY : undefined)) return "grounding";
   if (platform === "appsumo") {
     if (text.includes("\u2014") || text.includes("!") || /\p{Extended_Pictographic}/u.test(text)) return "voice";
-    for (const word of BANNED) {
+    for (const word of banned()) {
       if (new RegExp(`\\b${word}\\b`, "i").test(text)) return "voice";
     }
   }
@@ -195,8 +198,19 @@ function contentWords(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 2 && !STOP_WORDS.has(word));
 }
 
-function ungrounded(text: string, facts: string): boolean {
-  const allowed = new Set(contentWords(facts));
+/**
+ * Neutral words Facebook Page copy may use beyond the facts (greetings, calls to action). They
+ * carry no claim, so they cannot invent a city, price, date, or service.
+ */
+export const FACEBOOK_VOCABULARY = [
+  "welcome", "official", "page", "follow", "visit", "learn", "more", "now", "open", "today", "here",
+  "news", "updates", "contact", "message", "call", "book", "see", "find", "get", "touch", "hello",
+  "launch", "launching", "glad", "thanks", "you", "your", "our", "can", "will", "what", "how",
+  "who", "why", "about", "new", "soon", "back", "every", "week", "questions", "help", "helps",
+];
+
+function ungrounded(text: string, facts: string, extra?: readonly string[]): boolean {
+  const allowed = new Set([...contentWords(facts), ...(extra ?? [])]);
   const used = contentWords(text);
   return used.length === 0 || used.some((word) => !allowed.has(word));
 }
@@ -258,7 +272,7 @@ function clipWords(value: string, max: number): string {
   return (boundary > 0 ? cut.slice(0, boundary) : cut).trim();
 }
 
-function extractObject(text: string): Record<string, unknown> | null {
+export function extractObject(text: string): Record<string, unknown> | null {
   const start = text.indexOf("{");
   if (start < 0) return null;
   let depth = 0;

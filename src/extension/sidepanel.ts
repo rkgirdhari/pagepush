@@ -33,6 +33,7 @@ import {
   type PanelState,
 } from "./panel-state.ts";
 import { clearAll, load, saver } from "./storage.ts";
+import { wireCopyPanel } from "./copy-panel.ts";
 
 const FACEBOOK_TAB = /^https:\/\/([a-z0-9-]+\.)*facebook\.com\//i;
 const RETRIES = 4;
@@ -623,6 +624,23 @@ function onContentEvent(event: ContentEvent): void {
   }
   setBanner({ tone: "info", title: "A Facebook dialog opened or closed.", detail: "If it has fields from the pack, plan again to include them. Your current draft still stands." });
 }
+
+// Optional copy drafting (offline facts, or a local Ollama on a click). Drafts edit the pack, and a
+// pack edit blocks Draft and Commit until the view is planned again, so drafted copy reaches
+// Facebook only through a fresh Plan -> Draft -> Approve & Commit.
+wireCopyPanel({
+  doc: document,
+  fetch: window.fetch.bind(window),
+  storage: chrome.storage.local,
+  pack: () => state.pack,
+  applyCopy(copy) {
+    const pack = structuredClone(state.pack);
+    if (copy.bio != null) setPath(pack, "page.bio", copy.bio);
+    if (copy.launchPost != null) setPath(pack, "launchPost.text", copy.launchPost);
+    commitState(editPack(state, pack), { renderForm: true });
+  },
+  setBanner,
+});
 
 // ---------- start ----------
 

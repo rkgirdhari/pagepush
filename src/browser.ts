@@ -18,3 +18,17 @@ export {
 } from "./shims/facebook.ts";
 export type { FacebookPack, FacebookTier, MediaNeed, Weekday } from "./shims/facebook.ts";
 export type { Action, ApplyResult, ConfirmToken, FieldSchema, FillPlan, Gate, PlanIssue } from "./types.ts";
+export { draftFacebookCopy, facebookCopyFields, facebookFacts, offlineFacebookCopy, bioLimit, LAUNCH_POST_DRAFT_MAX } from "./draft/facebook-copy.ts";
+export type { FacebookCopyOutcome } from "./draft/facebook-copy.ts";
+export {
+  checkAndLoad,
+  DEFAULT_OLLAMA_MODEL,
+  modelMatches,
+  OLLAMA_ORIGINS_HELP,
+  OLLAMA_URL,
+  ollamaRunner,
+  ollamaStatus,
+  pullModel,
+  warmModel,
+} from "./draft/ollama.ts";
+export type { FetchLike, LoadStep, OllamaFailure, OllamaStatus, PullProgress } from "./draft/ollama.ts";

@@ -94,6 +94,14 @@ Check the label strings against a live logged-in page before using a plan on a r
 
 If AppSumo fields come back unconfirmed, `recoverListing` returns the same markdown as `renderListingPaste` plus a `paste-fallback` warning. `renderDevpostPaste` is the hackathon copy block for the same situation. Neither one clicks submit.
 
+## Bio and launch-post drafting in the side panel
+
+The side panel card "Draft bio & launch post" has an offline draft that needs nothing installed, and
+an optional local Ollama path (`http://localhost:11434`, default model `qwen3`) with one-click
+**Check / Load Model** and **Draft Copy with Ollama**. Drafts go into the pack for review and reach
+Facebook only through Plan → Draft → Approve & Commit. Setup, the checks a model draft must pass, and
+the Windows `OLLAMA_ORIGINS` fix for HTTP 403 are in [docs/OLLAMA.md](docs/OLLAMA.md).
+
 ## Local Qwen3 draft
 
 Copy drafts can come from a Candle runner pinned to Hugging Face `Qwen/Qwen3-0.6B-GGUF`, file `Qwen3-0.6B-Q8_0.gguf` (Q8_0, 639,446,688 bytes, the only GGUF in that repo). The tokenizer is `Qwen/Qwen3-0.6B` `tokenizer.json`. Checksums and revisions are in `models/qwen3-0.6b-q8.json`. The weights are not in git.
