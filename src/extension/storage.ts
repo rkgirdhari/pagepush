@@ -1,12 +1,11 @@
-// Local-only persistence. Everything goes to chrome.storage.local under one key; nothing is
-// ever written to chrome.storage.sync, and nothing leaves the browser.
+// Local-only persistence. Nothing is written to chrome.storage.sync.
 import type { FacebookPack } from "../browser.ts";
-import type { Checklist, PanelState, ProgressEntry, Session } from "./panel-state.ts";
+import type { Checklist, PanelState, ProgressEntry, Session, RecordArchive } from "./panel-state.ts";
 import type { ReceiptEntry } from "./receipt.ts";
+import type { PackVersion } from "./version-history.ts";
 
 export const STORAGE_KEY = "pagepush.v1";
 
-/** The slice of chrome.storage.StorageArea Page Push uses. */
 export interface LocalArea {
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
@@ -18,22 +17,20 @@ export interface Saved {
   pack: FacebookPack;
   checklist: Checklist;
   progress: ProgressEntry[];
-  /** The last plan, kept so the panel can resume it after a reload if the tab still holds it. */
   session: Session | null;
-  /** Sprint receipt entries, one per Approve & Commit. Older saves without it load as empty. */
   receipts?: ReceiptEntry[];
+  versions?: PackVersion[];
+  archives?: RecordArchive[];
+  /** Older saves lack provenance for their records. */
+  recordsScoped?: boolean;
   savedAt: string;
 }
 
 export function toSaved(state: PanelState, at = new Date()): Saved {
   return {
-    version: 1,
-    pack: state.pack,
-    checklist: state.checklist,
-    progress: state.progress,
-    session: state.session,
-    receipts: state.receipts ?? [],
-    savedAt: at.toISOString(),
+    version: 1, pack: state.pack, checklist: state.checklist, progress: state.progress,
+    session: state.session, receipts: state.receipts ?? [], versions: state.versions ?? [],
+    archives: state.archives ?? [], recordsScoped: true, savedAt: at.toISOString(),
   };
 }
 
@@ -42,37 +39,62 @@ export async function load(area: LocalArea): Promise<Saved | null> {
     const found = (await area.get(STORAGE_KEY))[STORAGE_KEY] as Saved | undefined;
     if (!found || found.version !== 1 || !found.pack) return null;
     return found;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export async function save(area: LocalArea, state: PanelState): Promise<void> {
   await area.set({ [STORAGE_KEY]: toSaved(state) });
 }
 
-/** Clear All Local Data: wipes this extension's local storage area, not just Page Push's key. */
-export async function clearAll(area: LocalArea): Promise<void> {
-  await area.clear();
-}
+export async function clearAll(area: LocalArea): Promise<void> { await area.clear(); }
 
-/** A debounced saver so typing in the pack form does not write on every keystroke. */
-export function saver(area: LocalArea, delayMs = 300): { schedule(state: PanelState): void; flush(): Promise<void> } {
+/** This saver instance serializes its own writes. Clear fences its queue, not other panels or contexts. */
+export function saver(area: LocalArea, delayMs = 300): {
+  schedule(state: PanelState): void;
+  flush(): Promise<void>;
+  write(items: Record<string, unknown>): Promise<void>;
+  clear(): Promise<void>;
+} {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let pending: PanelState | null = null;
-  const flush = async (): Promise<void> => {
-    if (timer) clearTimeout(timer);
+  let generation = 0;
+  let clearing = false;
+  let tail: Promise<void> = Promise.resolve();
+  const enqueue = (work: () => Promise<void>, epoch: number): Promise<void> => {
+    const result = tail.then(async () => { if (epoch === generation && !clearing) await work(); });
+    tail = result.catch(() => undefined);
+    return result;
+  };
+  const flush = (): Promise<void> => {
+    if (timer !== null) clearTimeout(timer);
     timer = null;
-    const state = pending;
+    const snapshot = pending;
     pending = null;
-    if (state) await save(area, state);
+    return snapshot ? enqueue(() => save(area, snapshot), generation) : tail;
   };
   return {
     schedule(state) {
-      pending = state;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { void flush(); }, delayMs);
+      if (clearing) return;
+      pending = structuredClone(state);
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => { void flush().catch(() => undefined); }, delayMs);
     },
     flush,
+    write(items) {
+      if (clearing) return Promise.resolve();
+      const snapshot = structuredClone(items);
+      return enqueue(() => area.set(snapshot), generation);
+    },
+    async clear() {
+      if (clearing) return tail;
+      clearing = true;
+      generation += 1;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      pending = null;
+      const result = tail.then(() => area.clear());
+      tail = result.catch(() => undefined);
+      try { await result; } finally { clearing = false; }
+    },
   };
 }

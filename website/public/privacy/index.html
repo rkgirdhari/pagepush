@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page Push Privacy Policy | Extension data</title>
+  <meta name="description" content="Learn how the Page Push extension handles client packs, Facebook drafts, receipts, optional Ollama requests, and local data deletion.">
+  <meta name="keywords" content="Page Push, privacy policy, extension privacy, local storage, Facebook">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Page Push">
+  <meta property="og:title" content="Page Push Privacy Policy | Extension data">
+  <meta property="og:description" content="How Page Push handles client packs, drafts, receipts, Ollama requests, and deletion.">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Page Push Privacy Policy | Extension data">
+  <meta name="twitter:description" content="How Page Push handles client packs, drafts, receipts, Ollama requests, and deletion.">
+  <link rel="icon" type="image/png" href="/assets/pagepush-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="top-surface"><header class="site-header wrap"><a class="brand" href="/" aria-label="Page Push home"><img src="/assets/pagepush-icon.png" width="42" height="42" alt=""><span>page<span class="brand-accent">push</span><small>THE BUSINESS PAGE ASSISTANT</small></span></a><nav aria-label="Main navigation"><a href="/#how-it-works">How it works</a><a href="/#features">Features</a><a href="/#setup">Setup</a><a href="/privacy/" aria-current="page">Privacy</a><a class="nav-cta" href="/#setup">View setup <span aria-hidden="true">↗</span></a></nav></header></div>
+<main id="main">
+  <div class="top-surface"><section class="policy-hero wrap"><p class="eyebrow"><span class="eyebrow-dot"></span> CLEAR BY DESIGN</p><h1>Page Push<br><em>privacy policy.</em></h1><p>For the Page Push browser extension · Version 1.0.0 · Last updated November 25, 2026</p></section></div>
+  <div class="wrap policy-layout"><aside class="policy-aside" aria-label="Policy sections"><strong>ON THIS PAGE</strong><a href="#stored">What is stored</a><a href="#never">Extension boundaries</a><a href="#reads">What it reads</a><a href="#ollama">Optional Ollama</a><a href="#receipts">Receipts</a><a href="#permissions">Permissions</a><a href="#deleting">Deleting data</a><a href="#contact">Contact</a></aside>
+  <article class="policy-content">
+    <p>Page Push (“the extension”) is a manual-assist browser extension. It helps a person fill in the setup and settings forms of a Facebook Business Page that they already administer and have open in their own browser. Draft writes values into Facebook’s form before approval. Page Push clicks a final Save, Post, or Create a Page control only after the person reviews and approves the plan; Facebook’s own handling of form data is outside the extension’s control.</p>
+    <p>Page Push has no server. The developer receives no data from the extension.</p>
+    <h2 id="stored">What the extension stores, and where</h2>
+    <p>The extension stores the data below in this browser’s local extension storage (<code>chrome.storage.local</code>). Page Push does not use <code>chrome.storage.sync</code> to sync it to your Google account or other devices. Copies exported by you and data handled by Facebook or Ollama are separate.</p>
+    <p>On a narrow screen, scroll the table horizontally to see both columns.</p>
+    <div class="table-wrap" role="region" aria-label="Locally stored data and purposes" tabindex="0"><table><thead><tr><th scope="col">Data</th><th scope="col">Why</th></tr></thead><tbody>
+      <tr><td>The client pack: Page name, categories, bio, website, phone, email, address, city, ZIP, hours, action button, launch post text, and whether the profile and cover photos are required</td><td>The values you want drafted into the Facebook form</td></tr>
+      <tr><td>Up to 20 saved client-pack versions, including pack values and save times</td><td>Lets you restore a previous pack; the current pack is saved before a restore unless it matches the newest snapshot</td></tr>
+      <tr><td>The current plan, including planned values and previews, its hash, and per-field progress (drafted or attempted, with times and the page address)</td><td>Lets Approve &amp; Commit check that the page still matches what you reviewed, and resume after the panel reloads. Older records may say committed but are unverified</td></tr>
+      <tr><td>The pre-flight checklist (page reviewed, profile picture and cover photo uploaded)</td><td>Gates Approve &amp; Commit</td></tr>
+      <tr><td>Sprint receipt entries, including plan hash, approval and completion times, tier, redacted Facebook page address, view type, field IDs and labels, checklist, outcome and any refusal code and message</td><td>A record of attempted, partial or refused actions, not confirmation by Facebook; see Sprint receipts</td></tr>
+      <tr><td>Archived prior-pack progress and receipt entries, with the Page name and tier when known</td><td>Keeps earlier records separate when a pack is replaced; older records may have unknown or mixed ownership</td></tr>
+      <tr><td>The name of the local Ollama model you chose, if you use Ollama</td><td>Remembers your choice</td></tr>
+    </tbody></table></div>
+    <h2 id="never">What the extension never does</h2>
+    <ul><li>It does not read or fill Facebook sign-in fields, two-factor codes, session cookies, or access tokens. You sign in to Facebook yourself. Do not enter credentials in a pack: pack fields and saved versions are stored locally as entered. A best-effort check blocks planning and local-model drafting when it recognizes credential-like text, but it cannot identify every secret.</li>
+    <li>It is designed for Business Pages, not personal profiles or timelines. Outside Facebook’s Page creation screen, it checks for the pack’s Page name and Page-admin signals and refuses views that fail those checks. These checks do not independently verify ownership or authorization; confirm you are on the intended Page you manage before drafting and approving.</li>
+    <li>It does not click Facebook’s final Save, Post, or Create a Page controls without your click on <strong>Approve &amp; Commit</strong> for that plan. One click approves one commit; it cannot be replayed.</li>
+    <li>It does not run on a schedule or in the background, and it does not imitate human typing, randomize its timing, or hide that a tool is filling the form.</li>
+    <li>It does not upload images. You attach profile pictures and cover photos yourself.</li>
+    <li>It does not send analytics, telemetry, or crash reports to the developer. Facebook may receive information entered into its own page; optional Ollama requests go to your local Ollama server.</li>
+    <li>The developer does not sell or rent your data. Selected pack values are written into Facebook’s page, and optional model requests are sent to the local Ollama server as described below.</li>
+    <li>It does not load or run remote code.</li></ul>
+    <h2 id="reads">What the extension reads</h2>
+    <p>On <code>facebook.com</code> pages, the content script reads the form labels, field values, buttons, and option lists of the page you have open, so it can match them to your pack, verify what was drafted, and notice if a field changes after drafting. It does not inspect other tabs, browsing history, messages, or friends lists as a feature, and it keeps none of the page content beyond the plan and progress described above.</p>
+    <p>When you click <strong>Draft</strong>, values are entered into Facebook’s own form in your tab; Facebook may process them at that point. When you click <strong>Approve &amp; Commit</strong>, Page Push attempts the applicable Save, Post, or Create a Page action. Confirm the outcome on Facebook, which handles data under its own <a href="https://www.facebook.com/privacy/policy/">Privacy Policy</a>.</p>
+    <h2 id="ollama">Optional local Ollama</h2>
+    <p>If you run <a href="https://ollama.com">Ollama</a> on your computer, the side panel can draft the Page bio and launch post with a model there (by default <code>qwen3</code>). It does so only when you click <strong>Check / Load Model</strong> or <strong>Draft Copy with Ollama</strong>, and only over <code>http://localhost:11434</code> (or <code>127.0.0.1</code>) on your own machine:</p>
+    <ul><li><strong>Check / Load Model</strong> asks Ollama for its version and installed models, asks Ollama to download the chosen model if it is missing (Ollama fetches it from its own model library), and loads it.</li><li><strong>Draft Copy with Ollama</strong> sends these pack facts to the local model: Page name, categories, bio, launch notes, website, city, action button (including its URL), and hours mode. The separate phone, email, and street-address fields are not included, but information entered in the included fields can be sent. A best-effort check blocks model drafting when the pack matches known credential patterns; do not rely on it to detect every secret.</li></ul>
+    <p>The drafted copy goes into your pack for you to read and edit. After you plan the view, <strong>Draft</strong> can write it into Facebook’s form before final approval, and Facebook may process it at that point. <strong>Approve &amp; Commit</strong> attempts the final action; confirm the outcome on Facebook. With Ollama stopped or not installed, <strong>Draft from facts (offline)</strong> builds copy from your pack without a model or network.</p>
+    <h2 id="receipts">Sprint receipts</h2>
+    <p>After an approval reaches the commit step, a local sprint receipt can record an attempted, partial, or refused outcome. A click that fails an earlier verification may not be recorded. An attempt is not proof Facebook saved, created, or published anything; check Facebook directly and do not retry blindly, particularly after an uncertain or partial result. Legacy committed entries are exported as attempted, not confirmed.</p>
+    <p><strong>Download sprint receipt</strong> saves a JSON file on your computer. It includes the Page name when attributable, plan hashes, timestamps, tier, field IDs and labels, checklist and any refusal code and message. Its redacted Facebook URL keeps the path and <code>id</code> and <code>sk</code> query parameters, so it may contain a Page ID. Drafted field values are not separately included, but the Page name, URL, labels, and unredacted refusal text can contain identifying or other sensitive information. Review a receipt before sharing it. Its SHA-256 checksum can detect accidental changes; it is not a signature and can be recomputed. Exported files are ordinary files; you decide who receives them.</p>
+    <h2 id="permissions">Permissions and why</h2>
+    <ul><li><code>sidePanel</code>: shows the pack editor, plan inspector, checklist, Approve &amp; Commit, and receipt export.</li><li><code>storage</code>: keeps the data listed above in <code>chrome.storage.local</code>.</li><li>Host access to <code>https://*.facebook.com/*</code>: lets the content script read and fill the Business Page form you have open. It runs only on Facebook.</li><li>Host access to <code>http://localhost:11434/*</code> and <code>http://127.0.0.1:11434/*</code>: lets the side panel reach a local Ollama on your own computer when you click an Ollama button. These are not remote servers.</li></ul>
+    <h2 id="deleting">Deleting your data</h2>
+    <p>When you start a blank pack, import or restore a pack, or change its Page name, existing progress and receipts are archived locally under the prior pack when present. Archived progress can be viewed and archived receipts downloaded. Older records without reliable ownership are marked unknown and may be mixed. In the receipt section, click <strong>Clear current progress and receipts</strong> twice to clear the current records only; this leaves the pack, plan, checklist, saved versions, and archives. There is no control to delete an individual archive.</p>
+    <p class="policy-callout"><strong>Before Clear All:</strong> Wait for other panels’ work to finish and close those Page Push panels/windows first. Then click <strong>Clear All Local Data</strong> in the remaining panel twice and keep the other panels closed until it finishes. On success, it clears this extension’s local storage, including packs, versions, plans, progress, checklists, receipts, archives, and settings. Each panel has its own write queue: another open panel can write stale data back after clearing, so multi-panel erasure is not guaranteed. If clearing fails, retry.</p>
+    <p>A Facebook action already dispatched may still finish; check Facebook directly. Uninstalling the extension also removes its storage. Downloaded receipt and pack JSON files are ordinary files on your computer; delete them separately. Models downloaded with Ollama are managed by Ollama (<code>ollama rm &lt;model&gt;</code>). Clearing local extension data does not erase data already handled by Facebook.</p>
+    <h2 id="children">Children</h2><p>Page Push is a business tool and is not directed at children.</p>
+    <h2 id="changes">Changes to this policy</h2><p>This document and its “Last updated” date change whenever Page Push’s data handling changes. The change is also listed in <code>CHANGELOG.md</code>.</p>
+    <h2 id="contact">Contact</h2><p>Questions about this policy should go to the Page Push publisher. A public publisher contact has not yet been provided; it must be added before the extension is submitted to the Chrome Web Store.</p>
+    <h2 id="website">About this website</h2><p>The policy above describes the extension, not this companion website. This site has no sign-in or contact form. The website’s hosting, delivery, and embedded platform branding may process technical visit information; do not enter client-pack information on this site.</p>
+  </article></div>
+</main>
+<footer class="site-footer"><div class="wrap footer-inner"><a class="brand footer-brand" href="/" aria-label="Page Push home"><img src="/assets/pagepush-icon.png" width="38" height="38" alt=""><span>page<span class="brand-accent">push</span><small>MADE FOR THE DETAILS</small></span></a><p>Thoughtful assistance for Facebook Business Pages.<br>Page Push is not affiliated with Meta or Facebook.</p><nav aria-label="Footer navigation"><a href="/#how-it-works">Workflow</a><a href="/#setup">Setup</a><a href="/privacy/" aria-current="page">Privacy policy</a></nav></div></footer>
+</body>
+</html>

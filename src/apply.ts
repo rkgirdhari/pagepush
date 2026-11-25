@@ -21,14 +21,16 @@ import { DEFAULT_SETTLE_MS, settle, settleFind } from "./settle.ts";
 interface Ctx {
   doc: Document;
   settleMs: number;
+  guard: (target?: Element) => void;
 }
 
 /**
  * Writes one action and resolves true once the page shows it, waiting up to `settleMs` per step
  * for React and Lexical to re-render. Resolves false when it never settles.
  */
-export async function writeAction(doc: Document, action: Action, settleMs = DEFAULT_SETTLE_MS): Promise<boolean> {
-  const ctx: Ctx = { doc, settleMs };
+export async function writeAction(doc: Document, action: Action, settleMs = DEFAULT_SETTLE_MS, guard: (target?: Element) => void = () => {}): Promise<boolean> {
+  const ctx: Ctx = { doc, settleMs, guard };
+  guard();
   switch (action.kind) {
     case "text":
     case "textarea":
@@ -99,7 +101,7 @@ export function matchesAction(doc: Document, action: Action): boolean {
 async function writeText(ctx: Ctx, action: Action): Promise<boolean> {
   const el = locate(ctx.doc, action.controlId);
   if (!el || typeof action.value !== "string") return false;
-  setValue(el, action.value);
+  setValue(ctx, el, action.value);
   // Re-read by id: React may swap the element while it re-renders.
   return until(ctx, () => readText(ctx.doc, action) === action.value);
 }
@@ -116,10 +118,10 @@ async function writeTags(ctx: Ctx, action: Action): Promise<boolean> {
   const widget = widgetOf(el);
   for (const tag of tags) {
     if (chipLanded(widget, tag)) continue;
-    setValue(el, tag);
-    dispatchKey(el, "keydown", "Enter");
+    setValue(ctx, el, tag);
+    dispatchKey(ctx, el, "keydown", "Enter");
     if (!(await until(ctx, () => chipLanded(widget, tag)))) {
-      setValue(el, "");
+      setValue(ctx, el, "");
       return false;
     }
   }
@@ -133,13 +135,14 @@ async function writeTokens(ctx: Ctx, action: Action): Promise<boolean> {
   const widget = widgetOf(el);
   for (const token of tokens) {
     if (tokenLanded(widget, token)) continue;
-    setValue(el, token);
+    setValue(ctx, el, token);
     // Typeahead options arrive after the query round trip.
     const option = await settleFind(ctx.doc, () => optionsOf(el).find((candidate) => optionMatches(candidate, token)), { timeoutMs: ctx.settleMs });
     if (!option) {
-      setValue(el, "");
+      setValue(ctx, el, "");
       return false;
     }
+    ctx.guard(option);
     clickElement(option);
     if (!(await until(ctx, () => tokenLanded(widget, token, option)))) return false;
   }
@@ -157,13 +160,13 @@ async function writeLines(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = linePayload(action.value);
   if (!payload) return false;
   const root = scope(ctx.doc, action);
-  const inputs = await ensureCount(root, payload.label, payload.lines.length, payload.addLabel, ctx.settleMs);
+  const inputs = await ensureCount(root, payload.label, payload.lines.length, payload.addLabel, ctx.settleMs, ctx.guard);
   if (inputs.length === 1 && payload.lines.length > 1 && inputs[0]!.tagName === "TEXTAREA") {
-    setValue(inputs[0]!, payload.lines.join("\n"));
+    setValue(ctx, inputs[0]!, payload.lines.join("\n"));
     return until(ctx, () => linesMatch(ctx.doc, action));
   }
   if (inputs.length < payload.lines.length) return false;
-  payload.lines.forEach((line, index) => setValue(inputs[index]!, line));
+  payload.lines.forEach((line, index) => setValue(ctx, inputs[index]!, line));
   return until(ctx, () => linesMatch(ctx.doc, action));
 }
 
@@ -183,7 +186,7 @@ async function writeSelect(ctx: Ctx, action: Action): Promise<boolean> {
   const option = optionElements(el).find((candidate) => optionMatches(candidate, action.value as string));
   if (!option) return false;
   const optionValue = option.getAttribute("value") ?? (option.textContent ?? "").trim();
-  setValue(el, optionValue);
+  setValue(ctx, el, optionValue);
   return until(ctx, () => selectMatches(ctx.doc, action));
 }
 
@@ -209,7 +212,7 @@ async function writeChoice(ctx: Ctx, action: Action): Promise<boolean> {
   if (!group || typeof action.value !== "string") return false;
   const radio = radiosIn(group).find((candidate) => radioIs(candidate, action.value as string));
   if (!radio) return false;
-  if (!radioChecked(radio)) activate(radio);
+  if (!radioChecked(radio)) activate(ctx, radio);
   return until(ctx, () => choiceMatches(ctx.doc, action));
 }
 
@@ -226,7 +229,8 @@ function radioIs(radio: Element, value: string): boolean {
 }
 
 /** A real activation: native .click() runs the browser's default action, so React sees the change. */
-function activate(el: Element): void {
+function activate(ctx: Ctx, el: Element): void {
+  ctx.guard(el);
   const clickable = el as Element & { click?: () => void };
   if (typeof clickable.click === "function") clickable.click();
   else clickElement(el);
@@ -243,7 +247,10 @@ async function writeButton(ctx: Ctx, action: Action): Promise<boolean> {
     return el != null && el.getAttribute("aria-disabled") !== "true" && !el.hasAttribute("disabled");
   };
   if (!enabled() && !(await until(ctx, enabled))) return false;
-  clickElement(locate(ctx.doc, action.controlId)!);
+  const button = locate(ctx.doc, action.controlId);
+  if (!button) return false;
+  ctx.guard(button);
+  clickElement(button);
   return true;
 }
 
@@ -254,8 +261,8 @@ async function writeInvites(ctx: Ctx, action: Action): Promise<boolean> {
   const root = widgetOf(el);
   for (const email of payload.emails) {
     if (chipLanded(root, email)) continue;
-    setValue(el, email);
-    if (!clickAdd(root, payload.addLabel)) return false;
+    setValue(ctx, el, email);
+    if (!clickAdd(root, payload.addLabel, ctx.guard)) return false;
     if (!(await until(ctx, () => chipLanded(root, email)))) return false;
   }
   return payload.emails.every((email) => chipLanded(root, email));
@@ -284,31 +291,31 @@ async function writePricing(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = action.value as PricingPayload;
   const root = scope(ctx.doc, action);
   if (!(await selectModel(ctx, root, payload))) return false;
-  const nameInputs = await ensureCount(root, payload.labels.tierName, payload.tiers.length, payload.labels.addTier, ctx.settleMs);
+  const nameInputs = await ensureCount(root, payload.labels.tierName, payload.tiers.length, payload.labels.addTier, ctx.settleMs, ctx.guard);
   if (nameInputs.length < payload.tiers.length) return false;
   for (let index = 0; index < payload.tiers.length; index += 1) {
     const tier = payload.tiers[index]!;
     const row = rowOf(nameInputs[index]!);
-    setValue(nameInputs[index]!, tier.name);
+    setValue(ctx, nameInputs[index]!, tier.name);
     const price = inputsByLabel(row, payload.labels.price)[0];
     if (!price) return false;
-    setValue(price, String(tier.price));
+    setValue(ctx, price, String(tier.price));
     const original = inputsByLabel(row, payload.labels.originalPrice)[0];
-    if (original) setValue(original, tier.originalPrice == null ? "" : String(tier.originalPrice));
+    if (original) setValue(ctx, original, tier.originalPrice == null ? "" : String(tier.originalPrice));
     const recommended = checkboxesByLabel(row, payload.labels.recommended)[0];
     if (recommended) await setChecked(ctx, recommended, Boolean(tier.recommended));
   }
-  const featureInputs = await ensureCount(root, payload.labels.feature, payload.features.length, payload.labels.addFeature, ctx.settleMs);
+  const featureInputs = await ensureCount(root, payload.labels.feature, payload.features.length, payload.labels.addFeature, ctx.settleMs, ctx.guard);
   if (featureInputs.length < payload.features.length) return false;
   for (let index = 0; index < payload.features.length; index += 1) {
     const feature = payload.features[index]!;
     const row = rowOf(featureInputs[index]!);
-    setValue(featureInputs[index]!, feature.label);
+    setValue(ctx, featureInputs[index]!, feature.label);
     const tooltip = inputsByLabel(row, payload.labels.tooltip)[0];
-    if (tooltip) setValue(tooltip, feature.tooltip ?? "");
+    if (tooltip) setValue(ctx, tooltip, feature.tooltip ?? "");
     const cells = inputsByLabel(row, payload.labels.value);
     if (cells.length < feature.values.length) return false;
-    feature.values.forEach((value, cell) => setValue(cells[cell]!, value));
+    feature.values.forEach((value, cell) => setValue(ctx, cells[cell]!, value));
   }
   return until(ctx, () => pricingMatches(ctx.doc, action));
 }
@@ -367,15 +374,15 @@ async function writeFeatures(ctx: Ctx, action: Action): Promise<boolean> {
   const root = scope(ctx.doc, action);
   const header = inputsByLabel(root, payload.labels.header)[0];
   if (!header) return false;
-  setValue(header, payload.sectionHeader);
-  const titles = await ensureCount(root, payload.labels.title, payload.stories.length, payload.labels.add, ctx.settleMs);
+  setValue(ctx, header, payload.sectionHeader);
+  const titles = await ensureCount(root, payload.labels.title, payload.stories.length, payload.labels.add, ctx.settleMs, ctx.guard);
   if (titles.length < payload.stories.length) return false;
   for (let index = 0; index < payload.stories.length; index += 1) {
     const story = payload.stories[index]!;
-    setValue(titles[index]!, story.title);
+    setValue(ctx, titles[index]!, story.title);
     const bullets = inputsByLabel(rowOf(titles[index]!), payload.labels.bullets)[0];
     if (!bullets) return false;
-    setValue(bullets, story.bullets.join("\n"));
+    setValue(ctx, bullets, story.bullets.join("\n"));
   }
   return until(ctx, () => featuresMatch(ctx.doc, action));
 }
@@ -402,14 +409,14 @@ interface FaqPayload {
 async function writeFaq(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = action.value as FaqPayload;
   const root = scope(ctx.doc, action);
-  const questions = await ensureCount(root, payload.labels.question, payload.items.length, payload.labels.add, ctx.settleMs);
+  const questions = await ensureCount(root, payload.labels.question, payload.items.length, payload.labels.add, ctx.settleMs, ctx.guard);
   if (questions.length < payload.items.length) return false;
   for (let index = 0; index < payload.items.length; index += 1) {
     const item = payload.items[index]!;
-    setValue(questions[index]!, item.question);
+    setValue(ctx, questions[index]!, item.question);
     const answer = inputsByLabel(rowOf(questions[index]!), payload.labels.answer)[0];
     if (!answer) return false;
-    setValue(answer, item.answer);
+    setValue(ctx, answer, item.answer);
   }
   return until(ctx, () => faqMatches(ctx.doc, action));
 }
@@ -431,16 +438,17 @@ function scope(doc: Document, action: Action): Element {
   return doc.documentElement;
 }
 
-function setValue(el: Element, value: string): void {
+function setValue(ctx: Ctx, el: Element, value: string): void {
+  ctx.guard(el);
   if (el.getAttribute("contenteditable") === "true") {
-    setRichText(el, value);
+    setRichText(ctx, el, value);
     return;
   }
   const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value");
   if (descriptor?.set) descriptor.set.call(el, value);
   else (el as HTMLInputElement).value = value;
-  dispatch(el, "input");
-  dispatch(el, "change");
+  dispatch(ctx, el, "input");
+  dispatch(ctx, el, "change");
 }
 
 /**
@@ -449,7 +457,7 @@ function setValue(el: Element, value: string): void {
  * .checked directly. Resolves once the control shows the wanted state.
  */
 function setChecked(ctx: Ctx, el: Element, checked: boolean): Promise<boolean> {
-  if (isChecked(el) !== checked) activate(el);
+  if (isChecked(el) !== checked) activate(ctx, el);
   return until(ctx, () => isChecked(el) === checked);
 }
 
@@ -480,39 +488,44 @@ function readValue(el: Element): string {
  * A Lexical editor that took none of these is left untouched, so readback fails and the field
  * is reported unconfirmed instead of silently holding text the editor never registered.
  */
-function setRichText(el: Element, value: string): void {
+function setRichText(ctx: Ctx, el: Element, value: string): void {
   const doc = el.ownerDocument;
   if (!doc) return;
-  focusAndSelectAll(el);
-  if (deliverByExecCommand(doc, el, value)) return;
-  if (!dispatchInputEvent(el, "beforeinput", value)) {
-    dispatchInputEvent(el, "input", value);
+  focusAndSelectAll(ctx, el);
+  if (deliverByExecCommand(ctx, doc, el, value)) return;
+  if (!dispatchInputEvent(ctx, el, "beforeinput", value)) {
+    dispatchInputEvent(ctx, el, "input", value);
     return;
   }
-  if (dispatchPaste(el, value)) return;
+  if (dispatchPaste(ctx, el, value)) return;
   if (isLexical(el)) return;
+  ctx.guard(el);
   el.textContent = value;
-  dispatchInputEvent(el, "input", value);
+  dispatchInputEvent(ctx, el, "input", value);
 }
 
 function isLexical(el: Element): boolean {
   return el.closest("[data-lexical-editor='true']") != null;
 }
 
-function focusAndSelectAll(el: Element): void {
+function focusAndSelectAll(ctx: Ctx, el: Element): void {
+  ctx.guard(el);
   (el as HTMLElement).focus?.();
+  ctx.guard(el);
   const view = el.ownerDocument?.defaultView;
   const selection = view?.getSelection?.();
   const doc = el.ownerDocument;
   if (!selection || !doc?.createRange) return;
   const range = doc.createRange();
   range.selectNodeContents(el);
+  ctx.guard(el);
   selection.removeAllRanges();
+  ctx.guard(el);
   selection.addRange(range);
 }
 
 /** True when the native pipeline reached the editor (any input event fired during the command). */
-function deliverByExecCommand(doc: Document, el: Element, value: string): boolean {
+function deliverByExecCommand(ctx: Ctx, doc: Document, el: Element, value: string): boolean {
   const exec = (doc as Document & { execCommand?: (command: string, ui: boolean, value: string) => boolean }).execCommand;
   if (typeof exec !== "function") return false;
   let reached = false;
@@ -520,6 +533,7 @@ function deliverByExecCommand(doc: Document, el: Element, value: string): boolea
   el.addEventListener("beforeinput", seen);
   el.addEventListener("input", seen);
   let ok = false;
+  ctx.guard(el);
   try {
     ok = exec.call(doc, "insertText", false, value) === true;
   } catch {
@@ -532,7 +546,8 @@ function deliverByExecCommand(doc: Document, el: Element, value: string): boolea
 }
 
 /** Dispatches an InputEvent. Returns false when a handler cancelled it (the editor took the text). */
-function dispatchInputEvent(el: Element, type: "beforeinput" | "input", data: string): boolean {
+function dispatchInputEvent(ctx: Ctx, el: Element, type: "beforeinput" | "input", data: string): boolean {
+  ctx.guard(el);
   const view = el.ownerDocument?.defaultView;
   const InputCtor = (view as { InputEvent?: typeof InputEvent } | null | undefined)?.InputEvent;
   const init = { bubbles: true, cancelable: type === "beforeinput", inputType: "insertText", data };
@@ -549,11 +564,12 @@ function dispatchInputEvent(el: Element, type: "beforeinput" | "input", data: st
 }
 
 /** Returns true when a handler cancelled the paste (the editor inserted the text itself). */
-function dispatchPaste(el: Element, text: string): boolean {
+function dispatchPaste(ctx: Ctx, el: Element, text: string): boolean {
   const view = el.ownerDocument?.defaultView as
     | (Window & { DataTransfer?: typeof DataTransfer; ClipboardEvent?: typeof ClipboardEvent })
     | null;
   if (!view || typeof view.DataTransfer !== "function" || typeof view.ClipboardEvent !== "function") return false;
+  ctx.guard(el);
   try {
     const data = new view.DataTransfer();
     data.setData("text/plain", text);
@@ -590,13 +606,15 @@ function readRichText(el: Element): string {
   return out.replace(/\n+$/, "");
 }
 
-function dispatch(el: Element, type: string): void {
+function dispatch(ctx: Ctx, el: Element, type: string): void {
+  ctx.guard(el);
   const view = el.ownerDocument?.defaultView;
   const EventCtor = view?.Event ?? Event;
   el.dispatchEvent(new EventCtor(type, { bubbles: true }));
 }
 
-function dispatchKey(el: Element, type: string, key: string): void {
+function dispatchKey(ctx: Ctx, el: Element, type: string, key: string): void {
+  ctx.guard(el);
   const view = el.ownerDocument?.defaultView as (Window & { KeyboardEvent?: typeof KeyboardEvent }) | null;
   if (view && typeof view.KeyboardEvent === "function") {
     el.dispatchEvent(new view.KeyboardEvent(type, { key, bubbles: true, cancelable: true }));

@@ -3,8 +3,10 @@ import {
   bindPage,
   ensureId,
   findSection,
+  inputsByLabel,
   isButtonControl,
   labelMatches,
+  locate,
   radioText,
   radiosIn,
   tokenLanded,
@@ -335,7 +337,19 @@ function planSection(draft: PlanDraft, field: FieldSchema): void {
   }));
 }
 
+let planSequence = 0;
+
 function finish(input: BuildInput, draft: PlanDraft): FillPlan {
+  if (planSequence >= Number.MAX_SAFE_INTEGER) throw new Error("Plan instance limit reached; reload the extension.");
+  const sequence = ++planSequence;
+  // The document counter survives content-script reinjection; navigation time separates tabs
+  // and new documents without randomness or exposing form values.
+  const marker = "data-pagepush-plan-sequence";
+  const previous = Number(input.document.documentElement.getAttribute(marker) ?? "0");
+  if (!Number.isSafeInteger(previous) || previous < 0 || previous >= Number.MAX_SAFE_INTEGER) throw new Error("Invalid plan sequence; reload the page.");
+  const documentSequence = previous + 1;
+  input.document.documentElement.setAttribute(marker, String(documentSequence));
+  const instance = `${input.document.defaultView?.performance.timeOrigin ?? 0}:${documentSequence}:${sequence}`;
   const preview = [...draft.actions.map((item) => item.preview), ...draft.notes];
   const planHash = sha256({
     ...(input.offer ? { offer: input.offer } : {}),
@@ -351,7 +365,7 @@ function finish(input: BuildInput, draft: PlanDraft): FillPlan {
       preview: item.preview,
     })),
   });
-  return {
+  const plan: FillPlan = {
     platform: input.schema.id,
     offer: input.offer ?? input.schema.offer,
     pageUrl: input.pageUrl,
@@ -363,6 +377,99 @@ function finish(input: BuildInput, draft: PlanDraft): FillPlan {
     preview,
     planHash,
   };
+  bindPlanIdentity(plan, input.document, instance);
+  return plan;
+}
+
+interface TargetIdentity {
+  element: Element | null;
+  scope: Element | null;
+  labels: Map<string, Element[]>;
+  radios: Element[];
+  buttons: Element[];
+  options: Element[];
+}
+
+interface PlanIdentity {
+  instance: string;
+  doc: Document;
+  documentUrl: string | undefined;
+  targets: Map<Action, TargetIdentity>;
+  gates: Map<string, Element | null>;
+}
+
+// DOM references stay in the content process; neither the plan nor its messages contain page data.
+const identities = new WeakMap<FillPlan, PlanIdentity>();
+
+function bindPlanIdentity(plan: FillPlan, doc: Document, instance: string): void {
+  const targets = new Map<Action, TargetIdentity>();
+  for (const action of plan.actions) {
+    const element = locate(doc, action.controlId);
+    let scope = element;
+    if (element && ["tokens", "tags", "invites"].includes(action.kind)) scope = widgetOf(element);
+    if (action.kind === "lines") scope = doc.documentElement;
+    const labels = new Map<string, Element[]>();
+    const payload = action.value && typeof action.value === "object" ? action.value as Record<string, unknown> : {};
+    const labelValues = action.kind === "lines" ? [payload.label] :
+      ["pricing", "features", "faq"].includes(action.kind) && payload.labels && typeof payload.labels === "object"
+        ? Object.values(payload.labels as Record<string, unknown>) : [];
+    if (scope) for (const label of labelValues) {
+      if (typeof label === "string") labels.set(label, inputsByLabel(scope, label));
+    }
+    const radios = ["choice", "pricing"].includes(action.kind) && element ? radiosIn(element) : [];
+    const buttons = scope ? Array.from(scope.querySelectorAll("button")) : [];
+    const listId = element?.getAttribute("aria-controls");
+    const list = listId ? doc.getElementById(listId) : scope?.querySelector("[role='listbox']");
+    const options = action.kind === "tokens" && list ? Array.from(list.querySelectorAll("[role='option']")) : [];
+    targets.set(action, { element, scope, labels, radios, buttons, options });
+  }
+  const gates = new Map<string, Element | null>();
+  for (const gate of plan.gates) if (gate.controlId) gates.set(gate.controlId, locate(doc, gate.controlId));
+  identities.set(plan, { instance, doc, documentUrl: doc.defaultView?.location.href, targets, gates });
+}
+
+export function planInstanceId(plan: FillPlan): string | undefined {
+  return identities.get(plan)?.instance;
+}
+
+/** False for a copied plan, navigation, duplicate IDs, or any replaced planned target. */
+export function planTargetValid(doc: Document, plan: FillPlan, action?: Action, target?: Element): boolean {
+  const identity = identities.get(plan);
+  if (!identity || identity.doc !== doc || identity.documentUrl !== doc.defaultView?.location.href) return false;
+  if (!action) return true;
+  const binding = identity.targets.get(action);
+  const original = binding?.element;
+  if (!binding || !original || !original.isConnected || locate(doc, action.controlId) !== original) return false;
+  if (binding.scope && !binding.scope.isConnected) return false;
+  for (const [label, originals] of binding.labels) {
+    const current = inputsByLabel(binding.scope!, label);
+    if (originals.some((el, index) => current[index] !== el)) return false;
+  }
+  if (binding.radios.length) {
+    const current = radiosIn(original);
+    if (binding.radios.some((el, index) => current[index] !== el)) return false;
+  }
+  if (!target) return true;
+  if (target.ownerDocument !== doc || !target.isConnected) return false;
+  if (target === original) return true;
+  if (target.tagName === "BUTTON") return binding.buttons.includes(target) && binding.scope?.contains(target) === true;
+  if (action.kind === "tokens" && target.getAttribute("role") === "option") {
+    const listId = original.getAttribute("aria-controls");
+    const list = listId ? doc.getElementById(listId) : binding.scope?.querySelector("[role='listbox']");
+    if (!list?.contains(target)) return false;
+    const keys = [target.getAttribute("data-slug"), target.getAttribute("value"), target.textContent]
+      .filter((value): value is string => Boolean(value)).map(labelKey);
+    const prior = binding.options.filter((option) => [option.getAttribute("data-slug"), option.getAttribute("value"), option.textContent]
+      .some((value) => value && keys.includes(labelKey(value))));
+    return prior.length === 0 || prior.includes(target);
+  }
+  return binding.scope?.contains(target) === true;
+}
+
+export function planGateValid(doc: Document, plan: FillPlan, id: string): boolean {
+  const identity = identities.get(plan);
+  const original = identity?.gates.get(id);
+  return planTargetValid(doc, plan) && original != null && original.isConnected && locate(doc, id) === original;
 }
 
 function claim(draft: PlanDraft, root: Element): void {

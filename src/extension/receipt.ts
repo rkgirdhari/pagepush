@@ -1,7 +1,9 @@
-// Sprint receipts: a local audit trail of every Approve & Commit, exportable as JSON for the
-// client. One entry per approval, whether the commit ran, ran in part, or was refused before any
-// click. Entries hold field ids and labels, never field values, passwords, or page content. The
-// export carries a SHA-256 over its own body so an edited receipt is easy to spot.
+// Sprint receipts record approvals that reach the commit step; earlier verification failures can
+// leave no entry. Outcomes are attempted, partial, or refused, not confirmation from Facebook.
+// Exports include the Page name when attributable, a redacted URL that may identify the Page,
+// field ids and labels, and possible refusal text; that text may contain sensitive information.
+// Drafted values are not separately exported. SHA-256 is a checksum, not a signature, and can be
+// recomputed. Review receipts before sharing them.
 import { facebookContext, facebookSchema, sha256, tierOffer, type FacebookPack, type FacebookTier } from "../browser.ts";
 import type { Checklist, Session } from "./panel-state.ts";
 
@@ -15,8 +17,8 @@ export interface FieldRef {
 
 export interface ReceiptEntry {
   planHash: string;
-  /** "committed": every commit step ran. "partial": some ran before a refusal. "refused": none ran. */
-  outcome: "committed" | "partial" | "refused";
+  /** Legacy committed entries are normalized to attempted on export; no server confirmation exists. */
+  outcome: "attempted" | "committed" | "partial" | "refused";
   /** Why a commit was refused or stopped, as the page reported it. */
   refusal?: { code: string; message: string };
   tier: FacebookTier;
@@ -30,6 +32,7 @@ export interface ReceiptEntry {
   drafted: FieldRef[];
   unconfirmed: FieldRef[];
   committed: FieldRef[];
+  attempted?: FieldRef[];
   checklist: Checklist & { profilePictureRequired: boolean; coverPhotoRequired: boolean };
 }
 
@@ -41,18 +44,19 @@ export interface SprintReceipt {
   schemaVersion: string;
   generatedAt: string;
   pageName: string;
-  tier: FacebookTier;
+  tier: FacebookTier | null;
   offer: { name: string; priceUsd: number } | null;
+  attribution: "current-pack" | "unknown-may-be-mixed";
   /** What the person confirmed by clicking Approve & Commit. */
   approvalStatement: string;
   entries: ReceiptEntry[];
-  totals: { approvals: number; committed: number; partial: number; refused: number; fieldsCommitted: number };
+  totals: { approvals: number; committed: number; attempted: number; partial: number; refused: number; fieldsCommitted: number; fieldsAttempted: number };
   /** SHA-256 (hex) of this object without the hash field, keys sorted. */
   sha256: string;
 }
 
 export const APPROVAL_STATEMENT =
-  "Each entry was approved by a person clicking Approve & Commit in the Page Push side panel for that exact plan hash, after the drafted fields were reviewed on the open Facebook page. Page Push does not submit, save, or post without that click.";
+  "Each entry records a person clicking Approve & Commit for that plan. Dispatched actions are attempts, not proof Facebook saved or published anything. Check Facebook directly; do not retry blindly. Earlier records may have uncertain ownership.";
 
 export function receiptEntry(input: {
   session: Session;
@@ -69,7 +73,7 @@ export function receiptEntry(input: {
   const plan = session.plan;
   const ref = (id: string): FieldRef => ({ id, label: plan.actions.find((action) => action.id === id)?.label ?? id });
   const commitIds = plan.actions.filter((action) => action.phase === "commit").map((action) => action.id);
-  const ran = input.outcome === "committed" ? commitIds : (input.committedIds ?? []).filter((id) => commitIds.includes(id));
+  const ran = input.outcome === "attempted" || input.outcome === "committed" ? commitIds : (input.committedIds ?? []).filter((id) => commitIds.includes(id));
   const drafted = session.drafted?.applied ?? [];
   const offer = tierOffer(pack.tier);
   return {
@@ -85,8 +89,8 @@ export function receiptEntry(input: {
     finishedAt: input.finishedAt.toISOString(),
     drafted: drafted.map(ref),
     unconfirmed: (session.drafted?.unconfirmed ?? []).map(ref),
-    // Drafted fields are committed with the commit step that saves them; a refusal commits none.
-    committed: input.outcome === "refused" ? [] : [...drafted.map(ref), ...ran.map(ref)],
+    committed: [],
+    attempted: input.outcome === "refused" ? [] : [...drafted.map(ref), ...ran.map(ref)],
     checklist: {
       ...input.checklist,
       profilePictureRequired: pack.media?.profilePicture === "required",
@@ -95,26 +99,34 @@ export function receiptEntry(input: {
   };
 }
 
-export function buildSprintReceipt(input: { pack: FacebookPack; entries: ReceiptEntry[]; now?: Date; extensionVersion: string }): SprintReceipt {
+export function buildSprintReceipt(input: { pack: FacebookPack; entries: ReceiptEntry[]; now?: Date; extensionVersion: string; unattributed?: boolean }): SprintReceipt {
   const offer = tierOffer(input.pack.tier);
-  const entries = [...input.entries];
+  const entries = input.entries.map((entry): ReceiptEntry => ({
+    ...entry,
+    outcome: entry.outcome === "committed" ? "attempted" : entry.outcome,
+    attempted: entry.attempted ?? entry.committed ?? [],
+    committed: [],
+  }));
   const body: Omit<SprintReceipt, "sha256"> = {
     format: RECEIPT_FORMAT,
     version: RECEIPT_VERSION,
     extension: { name: "Page Push", version: input.extensionVersion },
     schemaVersion: facebookSchema.version,
     generatedAt: (input.now ?? new Date()).toISOString(),
-    pageName: input.pack.page?.name?.trim() ?? "",
-    tier: input.pack.tier,
-    offer: offer ? { name: offer.name, priceUsd: offer.priceUsd } : null,
+    pageName: input.unattributed ? "" : (input.pack.page?.name?.trim() ?? ""),
+    tier: input.unattributed ? null : input.pack.tier,
+    offer: !input.unattributed && offer ? { name: offer.name, priceUsd: offer.priceUsd } : null,
+    attribution: input.unattributed ? "unknown-may-be-mixed" : "current-pack",
     approvalStatement: APPROVAL_STATEMENT,
     entries,
     totals: {
       approvals: entries.length,
-      committed: entries.filter((entry) => entry.outcome === "committed").length,
+      committed: 0,
+      attempted: entries.filter((entry) => entry.outcome === "attempted").length,
       partial: entries.filter((entry) => entry.outcome === "partial").length,
       refused: entries.filter((entry) => entry.outcome === "refused").length,
-      fieldsCommitted: new Set(entries.flatMap((entry) => entry.committed.map((field) => field.id))).size,
+      fieldsCommitted: 0,
+      fieldsAttempted: new Set(entries.flatMap((entry) => (entry.attempted ?? []).map((field) => field.id))).size,
     },
   };
   return { ...body, sha256: sha256(body) };

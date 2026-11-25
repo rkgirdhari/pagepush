@@ -198,16 +198,27 @@ test("the side panel runs Plan → Draft → Approve & Commit and gates commit o
   assert.equal(disabled(h, "commit"), false, "the approved pack is back");
 
   await h.click("commit");
-  assert.match(h.banner(), /^Committed:/);
+  assert.equal(h.banner(), "Attempted: Save, Post, Save. Facebook success is unverified. Check the page directly; do not retry blindly.");
+  assert.equal(h.panel.getElementById("banner")!.dataset.tone, "warn");
   assert.deepEqual(clicks, { "fb-save": 1, "fb-cta-save": 1, "fb-post": 1 });
   assert.equal(disabled(h, "commit"), true);
   assert.equal(h.panel.getElementById("progress-card")!.hidden, false);
+  assert.match(h.panel.getElementById("reasons")!.textContent!, /already attempted.*Check Facebook/);
+  assert.match(h.panel.getElementById("plan-context")!.textContent!, /attempted \/ unverified/);
+  assert.match(h.panel.getElementById("progress")!.textContent!, /Attempted \/ unverified/);
+  assert.equal(h.panel.querySelectorAll("#progress [data-kind='committed']").length, 0);
+  assert.equal(h.panel.getElementById("receipt-summary")!.textContent, "1 approval: 1 attempted / unverified.");
+  assert.match(h.panel.getElementById("receipt-safety")!.textContent!, /Previous client records are archived locally.*Clear All targets archives too/);
 
   await h.tick();
   await new Promise((resolve) => setTimeout(resolve, 350));
-  const saved = h.local[STORAGE_KEY] as { pack: { page: { name: string } }; progress: unknown[] };
+  const saved = h.local[STORAGE_KEY] as { pack: { page: { name: string } }; progress: { status: string }[]; receipts: { outcome: string; committed: unknown[]; attempted?: unknown[] }[] };
   assert.equal(saved.pack.page.name, "Northline Studio");
   assert.ok(saved.progress.length > 0);
+  assert.ok(saved.progress.every((entry) => entry.status === "attempted"));
+  assert.equal(saved.receipts[0]!.outcome, "attempted");
+  assert.deepEqual(saved.receipts[0]!.committed, []);
+  assert.ok(saved.receipts[0]!.attempted!.length > 0);
   assert.equal(h.syncWrites, 0, "chrome.storage.sync is never touched");
 });
 
@@ -267,7 +278,33 @@ test("Clear All Local Data needs a second click and then erases everything", asy
   await h.click("clear");
   assert.deepEqual(h.local, {});
   assert.equal((h.panel.getElementById("page-name") as HTMLInputElement).value, "");
-  assert.match(h.banner(), /Local data cleared/);
+  assert.match(h.banner(), /Local data cleared in this panel/);
+  assert.equal(h.panel.getElementById("banner")!.dataset.tone, "warn");
+  assert.match(h.banner(), /Another panel or an already-started write can restore data/);
+  assert.match(h.banner(), /Downloaded files and Facebook data are not erased/);
+  assert.match(h.banner(), /A Facebook action already dispatched may still finish; check Facebook directly/);
+  assert.match(h.panel.getElementById("clear-warning")!.textContent!, /Erasure across panels is not guaranteed/);
+});
+
+test("version history saves locally and restoring invalidates a planned draft", async () => {
+  const h = await harness();
+  fillLaunchPack(h);
+  await h.click("version-save");
+  assert.match(h.panel.getElementById("version-status")!.textContent ?? "", /1 saved version/);
+  h.type("bio", "A changed bio.");
+  await h.click("plan");
+  assert.equal(disabled(h, "draft"), false);
+  const restore = h.panel.querySelector("#version-list button") as HTMLButtonElement;
+  restore.click();
+  await h.tick();
+  assert.equal((h.panel.getElementById("bio") as HTMLTextAreaElement).value, "Retainer-hour tracking for small agencies.");
+  assert.equal(disabled(h, "draft"), true);
+  assert.equal(disabled(h, "commit"), true);
+  assert.match(h.panel.getElementById("version-status")!.textContent ?? "", /2 saved versions/);
+  assert.match(h.banner(), /Plan this view again/);
+  await new Promise(resolve => setTimeout(resolve, 350));
+  assert.equal((h.local[STORAGE_KEY] as { versions: unknown[] }).versions.length, 2);
+  assert.equal(h.syncWrites, 0);
 });
 
 function ollamaStub(content: string) {
@@ -295,6 +332,7 @@ test("Draft from facts works with Ollama stopped, fills the pack for review, and
   assert.equal(bio, "Northline Studio: Software Company in Portland, Oregon. https://northline.example");
   assert.match((h.panel.getElementById("launch-post") as HTMLTextAreaElement).value, /^Northline Studio is now on Facebook\.\n\n/);
   assert.match(h.banner(), /Read the drafted copy before planning/);
+  assert.match(h.banner(), /Draft writes values into Facebook before final approval/);
   assert.match(h.panel.getElementById("ollama-status")!.textContent ?? "", /offline/);
 
   await h.click("copy-undo");

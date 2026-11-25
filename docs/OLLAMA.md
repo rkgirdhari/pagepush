@@ -29,8 +29,9 @@ prompt says to use only the pack facts. The answer is then checked like every mo
 Push: it must fit the field (255 characters for the bio, 600 for the launch post draft), may not add
 a URL, email, date, or price that is not in the pack, and may only use words from the pack facts plus
 a short list of neutral words ("welcome", "follow", "visit", "book", …). A field that fails is set
-aside with a note and the offline draft is used for it instead. If Ollama is stopped, unreachable,
-or slow, the whole draft falls back to the offline one.
+aside with a note and the offline draft is used for it instead. If the initial Ollama connection
+check fails, the panel leaves the pack unchanged; use **Draft from facts (offline)** separately.
+These checks are best-effort and do not prove that model-generated statements are true; review them.
 
 Nothing runs in the background: no polling, no scheduled pulls. Every call follows a click.
 
@@ -63,5 +64,5 @@ The offline draft keeps working meanwhile.
 ## Privacy
 
 The side panel sends the pack facts (Page name, categories, bio, launch notes, website, city, action
-button, hours) only to `localhost:11434`. A pack that looks like it holds a password, key, or token is
-never sent. See `PRIVACY_POLICY.md`.
+button, hours) only to `localhost:11434`. A best-effort check blocks known credential patterns,
+but cannot identify every secret. Do not enter credentials in a pack. See `PRIVACY_POLICY.md`.

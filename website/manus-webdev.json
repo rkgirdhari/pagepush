@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "projectId": "wdp_6065db17e1ac4a12e061c396",
+  "description": "Official companion website explaining the Page Push Facebook Business Page extension, installation, privacy, and release status.",
+  "managedGit": {
+    "baseCommit": "b7d444b8db11213c25b2e56caea2d1a53aea1b46"
+  }
+}

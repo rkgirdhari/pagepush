@@ -183,10 +183,11 @@ test("full stack on the live About capture: plan, draft, approve, commit once, e
   assert.equal(ui.disabled("commit"), false);
   await ui.click("commit");
   assert.equal(saves["fb-save"], 1, "one approval, one Save");
-  assert.match(ui.banner(), /^Committed: Save\./);
+  assert.equal(ui.banner(), "Attempted: Save. Facebook success is unverified. Check the page directly; do not retry blindly.");
+  assert.equal(ui.panel.getElementById("banner")!.dataset.tone, "warn");
   assert.equal(ui.disabled("commit"), true, "the approval is used up");
 
-  assert.match(ui.panel.getElementById("receipt-summary")!.textContent ?? "", /^1 approval recorded: 1 committed\./);
+  assert.equal(ui.panel.getElementById("receipt-summary")!.textContent, "1 approval: 1 attempted / unverified.");
   await ui.click("receipt-download");
   assert.equal(ui.downloads.length, 1);
   const { name, href } = ui.downloads[0]!;
@@ -198,11 +199,14 @@ test("full stack on the live About capture: plan, draft, approve, commit once, e
   assert.equal(receipt.tier, "standard");
   assert.equal(receipt.offer?.priceUsd, 15);
   const entry = receipt.entries[0]!;
-  assert.equal(entry.outcome, "committed");
+  assert.equal(entry.outcome, "attempted");
   assert.equal(entry.view, "page");
   assert.equal(entry.pageUrl, "https://www.facebook.com/profile.php?id=61550000000001&sk=directory_contact_info", "tracking parameters dropped");
   assert.deepEqual(entry.drafted.map((field) => field.id).sort(), ["address", "bio", "categories", "email", "phone", "website", "zip"]);
-  assert.ok(entry.committed.some((field) => field.id === "saveChanges"));
+  assert.deepEqual(entry.committed, [], "a click is not proof Facebook saved anything");
+  assert.deepEqual(entry.attempted!.map((field) => field.id).sort(), ["address", "bio", "categories", "email", "phone", "saveChanges", "website", "zip"]);
+  assert.deepEqual(receipt.totals, { approvals: 1, committed: 0, attempted: 1, partial: 0, refused: 0, fieldsCommitted: 0, fieldsAttempted: 8 });
+  assert.match(receipt.approvalStatement, /attempts, not proof Facebook saved or published anything/);
   assert.equal(entry.checklist.reviewedPage, true);
   assert.ok(Date.parse(entry.approvedAt) <= Date.parse(entry.finishedAt));
   assert.equal(JSON.stringify(receipt).includes("hello@northline.example"), false, "no field values in the receipt");
@@ -212,13 +216,41 @@ test("full stack on the live About capture: plan, draft, approve, commit once, e
   await new Promise((resolve) => setTimeout(resolve, 350)); // the debounced save
   assert.equal(((ui.local["pagepush.v1"] as { receipts?: unknown[] })?.receipts ?? []).length, 1);
 
+  // Switching clients archives the old records; clearing only the current records keeps them.
+  ui.type("page-name", "Another Client");
+  await ui.settle();
+  assert.match(ui.banner(), /Previous client records archived locally/);
+  assert.equal(ui.panel.getElementById("receipt-summary")!.textContent, "No approvals for this pack yet.");
+  assert.equal(ui.disabled("receipt-download"), true);
+  assert.match(ui.panel.getElementById("receipt-archives")!.textContent ?? "", /Northline Studio: 1 approval\(s\)/);
+  assert.match(ui.panel.getElementById("receipt-archives")!.textContent ?? "", /attempted \/ unverified/);
+  (ui.panel.querySelector("#receipt-archives button") as HTMLButtonElement).click();
+  await ui.settle();
+  assert.equal(ui.downloads.length, 2, "the archived receipt is a separate download");
+  const archivedHref = ui.downloads.at(-1)!.href;
+  const archived = JSON.parse(decodeURIComponent(archivedHref.slice(archivedHref.indexOf(",") + 1))) as SprintReceipt;
+  assert.equal(verifySprintReceipt(archived), true);
+  assert.equal(archived.pageName, "Northline Studio");
+  assert.equal(archived.attribution, "current-pack");
+  assert.deepEqual(archived.entries, receipt.entries);
+  assert.deepEqual(archived.totals, receipt.totals);
+  await ui.click("receipt-clear");
+  assert.match(ui.panel.getElementById("receipt-clear")!.textContent ?? "", /Click again/);
+  await ui.click("receipt-clear");
+  assert.match(ui.banner(), /Earlier archives and saved pack versions remain/);
+  assert.match(ui.panel.getElementById("receipt-archives")!.textContent ?? "", /Northline Studio/);
+
   await ui.click("clear");
   assert.ok(Object.keys(ui.local).length > 0, "the first click only arms Clear All");
   await ui.click("clear");
   assert.deepEqual(ui.local, {}, "chrome.storage.local is empty");
   assert.equal(ui.counts.syncCalls, 0, "chrome.storage.sync was never touched");
   assert.equal(ui.disabled("receipt-download"), true);
-  assert.match(ui.banner(), /sprint receipts, and settings were erased/);
+  assert.equal(ui.panel.getElementById("receipt-archives")!.textContent, "");
+  assert.match(ui.banner(), /Local data cleared in this panel/);
+  assert.match(ui.banner(), /Another panel or an already-started write can restore data/);
+  assert.match(ui.banner(), /Downloaded files and Facebook data are not erased/);
+  assert.match(ui.banner(), /A Facebook action already dispatched may still finish; check Facebook directly/);
 });
 
 test("full stack on the live composer capture: a refused commit is recorded and the approval can be given again", async () => {
@@ -242,17 +274,33 @@ test("full stack on the live composer capture: a refused commit is recorded and 
   await ui.settle();
   await ui.click("commit");
   assert.equal(posts["fb-post"], 0);
-  assert.match(ui.panel.getElementById("receipt-summary")!.textContent ?? "", /1 approval recorded: 0 committed, 1 refused or partial/);
+  assert.equal(ui.panel.getElementById("receipt-summary")!.textContent, "1 approval: 0 attempted / unverified, 1 refused or partial.");
+  assert.equal(ui.disabled("commit"), false, "a refusal before dispatch leaves the plan usable");
 
-  // The person solves it and approves again; the same plan commits once.
+  // The person solves it and approves again; the same plan attempts the Post once.
   response.value = "solved-by-person";
   await ui.click("commit");
   assert.equal(posts["fb-post"], 1);
+  assert.match(ui.banner(), /^Attempted: Post\. Facebook success is unverified\./);
+  assert.equal(ui.disabled("commit"), true);
+  assert.equal(ui.panel.getElementById("receipt-summary")!.textContent, "2 approvals: 1 attempted / unverified, 1 refused or partial.");
   await ui.click("receipt-download");
   const href = ui.downloads.at(-1)!.href;
   const receipt = JSON.parse(decodeURIComponent(href.slice(href.indexOf(",") + 1))) as SprintReceipt;
-  assert.deepEqual(receipt.entries.map((entry) => entry.outcome), ["refused", "committed"]);
+  assert.equal(verifySprintReceipt(receipt), true);
+  assert.deepEqual(receipt.entries.map((entry) => entry.outcome), ["refused", "attempted"]);
   assert.equal(receipt.entries[0]!.refusal?.code, "captcha");
+  assert.deepEqual(receipt.entries[0]!.attempted, []);
+  assert.ok(receipt.entries.every((entry) => entry.committed.length === 0));
+  assert.deepEqual(receipt.entries[1]!.attempted!.map((field) => field.id).sort(), ["launchPost", "publishPost"]);
   assert.equal(receipt.entries[0]!.planHash, receipt.entries[1]!.planHash, "the same plan, approved twice");
-  assert.deepEqual(receipt.totals, { approvals: 2, committed: 1, partial: 0, refused: 1, fieldsCommitted: 2 });
+  assert.deepEqual(receipt.totals, { approvals: 2, committed: 0, attempted: 1, partial: 0, refused: 1, fieldsCommitted: 0, fieldsAttempted: 2 });
+
+  await ui.click("receipt-clear");
+  assert.equal(ui.disabled("receipt-download"), false, "the first click only arms current-record clearing");
+  await ui.click("receipt-clear");
+  assert.equal(ui.disabled("receipt-download"), true);
+  assert.equal(ui.panel.getElementById("receipt-summary")!.textContent, "No approvals for this pack yet.");
+  assert.equal(ui.panel.getElementById("progress-card")!.hidden, true);
+  assert.match(ui.banner(), /Current progress and receipts cleared.*Earlier archives and saved pack versions remain/);
 });

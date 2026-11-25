@@ -3,7 +3,8 @@
   "name": "Page Push",
   "short_name": "Page Push",
   "version": "1.0.0",
-  "description": "Manual-assist form fill for Facebook Business Page setup. You review every draft and approve before anything is saved or posted.",
+  "minimum_chrome_version": "120",
+  "description": "Manual-assist form fill for Facebook Business Pages. Review the draft and approve each final action.",
   "permissions": [
     "sidePanel",
     "storage"

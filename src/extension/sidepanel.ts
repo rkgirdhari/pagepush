@@ -13,12 +13,14 @@ import {
   counters,
   fieldById,
   pasteBlocks,
+  packFingerprint,
   readPath,
   setPath,
   starterPack,
   tierFields,
 } from "./packs.ts";
 import {
+  archiveRecords,
   bannerFor,
   commitReadiness,
   draftReadiness,
@@ -29,13 +31,15 @@ import {
   recordCommitRefused,
   recordDraft,
   recordDrift,
+  replacePack,
   startSession,
   type Banner,
   type PanelState,
 } from "./panel-state.ts";
-import { clearAll, load, saver } from "./storage.ts";
-import { wireCopyPanel } from "./copy-panel.ts";
+import { load, saver } from "./storage.ts";
+import { wireCopyPanel, type CopyPanel } from "./copy-panel.ts";
 import { buildSprintReceipt, receiptFileName } from "./receipt.ts";
+import { readVersions, restoreVersion, saveVersion } from "./version-history.ts";
 import manifest from "../../manifest.json" with { type: "json" };
 
 const FACEBOOK_TAB = /^https:\/\/([a-z0-9-]+\.)*facebook\.com\//i;
@@ -45,6 +49,12 @@ const RETRY_MS = 600;
 let state: PanelState = initialState();
 let activeTabId: number | null = null;
 let busy = false;
+let clearing = false;
+let starting = true;
+let revision = 0;
+let dataGeneration = 0;
+let copyPanel: CopyPanel | undefined;
+const available = (): boolean => !clearing && !starting;
 const store = saver(chrome.storage.local);
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -77,6 +87,29 @@ function buildStaticControls(): void {
   }
   const list = $("cta-types");
   for (const item of CTA_SUGGESTIONS) list.append(option(item, item));
+  const summary = $("receipt-summary");
+  const oldDescription = summary.nextElementSibling;
+  if (oldDescription) oldDescription.textContent = "Receipts include the Page name, Facebook Page address or ID, plan hashes, times, tier, field names and checklist. Refusal messages may include additional page or client information. Review before sharing. Attempts do not confirm Facebook success; the checksum is not a signature.";
+  const explanation = document.createElement("p");
+  explanation.id = "receipt-safety"; explanation.className = "muted";
+  explanation.textContent = "Actions are attempted, not verified by Facebook. Previous client records are archived locally when switching packs. Clear All targets archives too; see the local-data warning below.";
+  summary.after(explanation);
+  const archives = document.createElement("div"); archives.id = "receipt-archives";
+  explanation.after(archives);
+  const clearRecords = document.createElement("button");
+  clearRecords.type = "button"; clearRecords.id = "receipt-clear"; clearRecords.textContent = "Clear current progress and receipts";
+  archives.after(clearRecords);
+  clearRecords.addEventListener("click", () => {
+    if (!available() || busy) return;
+    if (clearRecords.dataset.armed !== "true") {
+      clearRecords.dataset.armed = "true"; clearRecords.textContent = "Click again to clear current progress and receipts";
+      setTimeout(() => { clearRecords.dataset.armed = ""; clearRecords.textContent = "Clear current progress and receipts"; }, 5000);
+      return;
+    }
+    clearRecords.dataset.armed = ""; clearRecords.textContent = "Clear current progress and receipts";
+    commitState({ ...state, progress: [], receipts: [] });
+    setBanner({ tone: "info", title: "Current progress and receipts cleared.", detail: "Earlier archives and saved pack versions remain. Clear All removes them too." });
+  });
 }
 
 function option(value: string, text: string): HTMLOptionElement {
@@ -89,9 +122,13 @@ function option(value: string, text: string): HTMLOptionElement {
 // ---------- state changes ----------
 
 function commitState(next: PanelState, options: { renderForm?: boolean } = {}): void {
+  if (!available()) return;
+  const archivesAdded = (next.archives?.length ?? 0) > (state.archives?.length ?? 0);
+  if (next.pack !== state.pack) { revision += 1; copyPanel?.invalidate(); }
   state = next;
   store.schedule(state);
   render(options);
+  if (archivesAdded) setBanner({ tone: "info", title: "Previous client records archived locally.", detail: "The current progress and receipt were reset. Earlier receipts are available under Sprint receipt; Clear All erases archives too." });
 }
 
 function setBanner(banner: Banner): void {
@@ -128,13 +165,15 @@ async function refreshActiveTab(): Promise<chrome.tabs.Tab | null> {
 
 type SendResult = { reply: ContentReply; tabId: number } | { error: string; message?: string };
 
-async function send(request: PanelRequest, tabId?: number): Promise<SendResult> {
+async function send(request: PanelRequest, tabId?: number, allowed: () => boolean = () => true): Promise<SendResult> {
   const tab = await refreshActiveTab();
+  if (!allowed()) return { error: "superseded" };
   if (!tab?.id) return { error: "no-tab" };
   if (tabId != null && tab.id !== tabId) return { error: "context", message: "Switch back to the tab you planned." };
   if (!tab.url || !FACEBOOK_TAB.test(tab.url)) return { error: "not-facebook-tab" };
   for (let attempt = 0; ; attempt += 1) {
     try {
+      if (!allowed()) return { error: "superseded" };
       const reply = (await chrome.tabs.sendMessage(tab.id, request)) as ContentReply | undefined;
       if (!reply) return { error: "no-receiver" };
       return { reply, tabId: tab.id };
@@ -174,23 +213,34 @@ function failure(result: SendResult): boolean {
 // ---------- actions ----------
 
 async function planView(auto = false): Promise<void> {
-  if (busy) return;
+  if (busy || !available()) return;
   const check = checkPack(state.pack);
   if (!check.pack) {
     renderPackIssues(check.errors, check.warnings);
     setBanner({ tone: "bad", title: "The pack is not valid yet.", detail: "Fix the pack checks listed above the Plan button, then plan." });
     return;
   }
+  const submitted = cleanPack(state.pack);
+  const submittedPrint = packFingerprint(submitted);
+  const startedRevision = revision, generation = dataGeneration;
+  const current = (): boolean => available() && revision === startedRevision && dataGeneration === generation;
   busy = true;
   render();
   try {
-    const result = await send({ type: "pagepush:plan", pack: cleanPack(state.pack) });
+    const result = await send({ type: "pagepush:plan", pack: submitted }, undefined, current);
+    if (!current() || packFingerprint(state.pack) !== submittedPrint) {
+      if (dataGeneration === generation && available()) {
+        commitState(invalidate(state, "The pack changed while planning. Plan again."));
+        setBanner({ tone: "warn", title: "Pack changed while planning.", detail: "The old reply was discarded. Plan again." });
+      }
+      return;
+    }
     if (failure(result) || "error" in result || !result.reply.ok || !result.reply.plan) {
       // A failed re-plan never leaves an older approval usable.
       commitState(invalidate(state, "This view could not be planned. Plan again."));
       return;
     }
-    commitState(startSession(state, result.tabId, result.reply.plan));
+    commitState(startSession(state, result.tabId, result.reply.plan, submittedPrint));
     const plan = result.reply.plan;
     if (plan.errors.length) {
       const refusal = plan.errors.find((item) => ["not-facebook", "page-identity", "not-business-page", "sign-in"].includes(item.code));
@@ -212,11 +262,14 @@ async function planView(auto = false): Promise<void> {
 
 async function draft(): Promise<void> {
   const session = state.session;
-  if (!session || busy || !draftReadiness(state, { activeTabId }).ok) return;
+  if (!session || busy || !available() || !draftReadiness(state, { activeTabId }).ok) return;
+  const startedRevision = revision, generation = dataGeneration;
+  const current = (): boolean => available() && revision === startedRevision && dataGeneration === generation && state.session === session;
   busy = true;
   render();
   try {
-    const result = await send({ type: "pagepush:draft", planHash: session.plan.planHash }, session.tabId);
+    const result = await send({ type: "pagepush:draft", planHash: session.plan.planHash }, session.tabId, current);
+    if (!current()) return;
     if (failure(result) || "error" in result || !result.reply.ok || !result.reply.draft) {
       const code = "error" in result ? result.error : result.reply.ok ? "" : result.reply.code;
       if (["context", "disconnected", "no-plan", "confirm"].includes(code)) {
@@ -237,29 +290,39 @@ async function draft(): Promise<void> {
 
 async function approveAndCommit(): Promise<void> {
   const session = state.session;
-  if (!session || busy || !commitReadiness(state, { activeTabId }).ok) return;
+  if (!session || busy || !available() || !commitReadiness(state, { activeTabId }).ok) return;
+  const startedRevision = revision, generation = dataGeneration;
+  const current = (): boolean => available() && revision === startedRevision && dataGeneration === generation && state.session === session && commitReadiness(state, { activeTabId }).ok;
   // The moment the person approved this plan hash; it goes into the sprint receipt.
   const approvedAt = new Date();
   busy = true;
   render();
   try {
-    const verify = await send({ type: "pagepush:verify", planHash: session.plan.planHash }, session.tabId);
+    const verify = await send({ type: "pagepush:verify", planHash: session.plan.planHash }, session.tabId, current);
+    if (!current()) return;
     if (failure(verify) || "error" in verify || !verify.reply.ok) return;
     if (verify.reply.drift?.length) {
       commitState(recordDrift(state, session.plan.planHash, verify.reply.drift));
       setBanner(bannerFor("drift"));
       return;
     }
-    const result = await send({ type: "pagepush:commit", planHash: session.plan.planHash }, session.tabId);
-    if (failure(result) || "error" in result || !result.reply.ok) {
-      if (!("error" in result) && !result.reply.ok) {
-        commitState(recordCommitRefused(state, { code: result.reply.code, message: result.reply.message, applied: result.reply.applied, approvedAt }));
-      }
+    const result = await send({ type: "pagepush:commit", planHash: session.plan.planHash }, session.tabId, current);
+    if (!current()) return;
+    if ("error" in result) {
+      commitState(recordCommitRefused(state, { code: "unknown-dispatch", message: "The reply was lost; the action may have been dispatched.", approvedAt }));
+      setBanner({ tone: "warn", title: "Action outcome unknown.", detail: "Check Facebook before doing anything else. Do not retry blindly." });
+      return;
+    }
+    if (!result.reply.ok) {
+      const uncertain = (result.reply.applied?.length ?? 0) > 0 || ["error", "unconfirmed"].includes(result.reply.code);
+      commitState(recordCommitRefused(state, { code: result.reply.code, message: result.reply.message, applied: result.reply.applied, approvedAt }));
+      if (uncertain) setBanner({ tone: "warn", title: "Action outcome unverified.", detail: "Some actions may have run. Check Facebook directly; do not retry blindly." });
+      else failure(result);
       return;
     }
     commitState(recordCommit(state, new Date(), approvedAt));
     const steps = session.plan.actions.filter((action) => action.phase === "commit").map((action) => action.label);
-    setBanner({ tone: "good", title: `Committed: ${steps.join(", ")}.`, detail: "When Facebook shows the next screen, it is planned automatically." });
+    setBanner({ tone: "warn", title: `Attempted: ${steps.join(", ")}.`, detail: "Facebook success is unverified. Check the page directly; do not retry blindly." });
   } finally {
     busy = false;
     render();
@@ -282,17 +345,71 @@ function render(options: { renderForm?: boolean } = {}): void {
   renderProgress();
   renderPaste();
   renderReceipts();
+  renderVersions();
   renderControls();
+}
+
+function renderVersions(): void {
+  const versions = state.versions;
+  $("version-status").textContent = versions.length
+    ? `${versions.length} saved version${versions.length === 1 ? "" : "s"}, newest first.`
+    : "No versions saved yet.";
+  $("version-list").replaceChildren(...versions.map((version, index) => {
+    const item = document.createElement("li");
+    const label = document.createElement("span");
+    const date = new Date(version.savedAt).toLocaleString();
+    label.textContent = `${date} · ${version.pack.page.name || "Unnamed pack"} · ${version.pack.tier} `;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Restore";
+    button.setAttribute("aria-label", `Restore ${version.pack.page.name || "unnamed pack"}, saved ${date}`);
+    button.addEventListener("click", () => {
+      if (!available()) return;
+      commitState(restoreVersion(state, index), { renderForm: true });
+      setBanner({ tone: "info", title: "Pack version restored.", detail: "Your previous pack was saved in version history; its progress and receipts were archived locally. Plan this view again." });
+    });
+    item.append(label, button);
+    return item;
+  }));
 }
 
 function renderReceipts(): void {
   const entries = state.receipts ?? [];
-  const committed = entries.filter((entry) => entry.outcome === "committed").length;
-  const other = entries.length - committed;
+  const attempted = entries.filter((entry) => entry.outcome === "attempted" || entry.outcome === "committed").length;
+  const other = entries.length - attempted;
   $("receipt-summary").textContent = entries.length
-    ? `${entries.length} approval${entries.length === 1 ? "" : "s"} recorded: ${committed} committed${other ? `, ${other} refused or partial` : ""}.`
-    : "No approvals yet. Each Approve & Commit is recorded here for the client.";
-  $<HTMLButtonElement>("receipt-download").disabled = entries.length === 0;
+    ? `${entries.length} approval${entries.length === 1 ? "" : "s"}: ${attempted} attempted / unverified${other ? `, ${other} refused or partial` : ""}.`
+    : "No approvals for this pack yet.";
+  $<HTMLButtonElement>("receipt-download").disabled = entries.length === 0 || !available();
+  $<HTMLButtonElement>("receipt-clear").disabled = busy || !available();
+  const host = $("receipt-archives");
+  host.replaceChildren(...(state.archives ?? []).map((archive, index) => {
+    const row = document.createElement("div");
+    const label = archive.unverifiedOwner ? "Earlier records - client unknown (may be mixed)" : (archive.pageName || "Unnamed previous pack");
+    row.textContent = `${label}: ${archive.receipts.length} approval(s), ${archive.progress.length} progress item(s). `;
+    if (archive.progress.length) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary"); summary.textContent = "View archived progress";
+      const list = document.createElement("ul");
+      list.replaceChildren(...archive.progress.map((entry) => plainItem(`${entry.label} - ${entry.status === "drafted" ? "drafted" : "attempted / unverified"} - ${shortUrl(entry.url)}`)));
+      details.append(summary, list); row.append(details);
+    }
+    if (archive.receipts.length) {
+      const button = document.createElement("button"); button.type = "button";
+      button.textContent = "Download archived receipt"; button.disabled = !available();
+      button.setAttribute("aria-label", `Download archived receipt for ${label}`);
+      button.addEventListener("click", () => {
+        if (!available()) return;
+        const selected = state.archives?.[index]; if (selected !== archive) return;
+        const pack = starterPack(archive.tier);
+        pack.page.name = archive.unverifiedOwner ? "Unattributed earlier records" : archive.pageName;
+        const receipt = buildSprintReceipt({ pack, entries: archive.receipts, extensionVersion: manifest.version, unattributed: archive.unverifiedOwner });
+        downloadJson(receiptFileName(receipt), receipt);
+      });
+      row.append(button);
+    }
+    return row;
+  }));
 }
 
 /** Saves a JSON file through a data: link, so no downloads permission is needed. */
@@ -351,7 +468,7 @@ function renderInspector(): void {
   card.hidden = !session;
   if (!session) return;
   const plan = session.plan;
-  const status = session.committedAt ? "committed" : session.stale ? `stale — ${session.stale}` : session.drafted ? "drafted" : "planned";
+  const status = session.committedAt ? "attempted / unverified" : session.stale ? `stale — ${session.stale}` : session.drafted ? "drafted" : "planned";
   $("plan-context").textContent = `${shortUrl(plan.pageUrl)} · ${status}`;
   $("plan-issues").replaceChildren(
     ...plan.errors.map((item) => issueItem("error", item.message)),
@@ -365,7 +482,7 @@ function renderInspector(): void {
       : session.drafted?.unconfirmed.includes(action.id)
         ? "unconfirmed"
         : session.committedAt
-          ? "committed"
+          ? "attempted"
           : session.drafted?.applied.includes(action.id)
             ? "applied"
             : action.phase;
@@ -408,7 +525,7 @@ function badgeCell(kind: string): HTMLTableCellElement {
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.dataset.kind = kind;
-  badge.textContent = kind === "draft" ? "Draft" : kind === "commit" ? "On approve" : kind[0]!.toUpperCase() + kind.slice(1);
+  badge.textContent = kind === "draft" ? "Draft" : kind === "commit" ? "On approve" : kind === "attempted" ? "Attempted / unverified" : kind[0]!.toUpperCase() + kind.slice(1);
   td.append(badge);
   return td;
 }
@@ -431,7 +548,7 @@ function renderProgress(): void {
   $("progress-card").hidden = state.progress.length === 0;
   $("progress").replaceChildren(...state.progress.map((entry) => {
     const row = document.createElement("tr");
-    row.append(cell(entry.label), badgeCell(entry.status), cell(shortUrl(entry.url)));
+    row.append(cell(entry.label), badgeCell(entry.status === "committed" ? "attempted" : entry.status), cell(shortUrl(entry.url)));
     return row;
   }));
 }
@@ -469,9 +586,9 @@ function renderControls(): void {
   const context = { activeTabId };
   const canDraft = draftReadiness(state, context);
   const canCommit = commitReadiness(state, context);
-  planButton.disabled = busy;
-  draftButton.disabled = busy || !canDraft.ok;
-  commitButton.disabled = busy || !canCommit.ok;
+  planButton.disabled = busy || !available();
+  draftButton.disabled = busy || !available() || !canDraft.ok;
+  commitButton.disabled = busy || !available() || !canCommit.ok;
   const reasons = state.session ? (state.session.drafted ? canCommit.reasons : canDraft.ok ? canCommit.reasons.filter((r) => !r.startsWith("Tick")) : canDraft.reasons) : [];
   $("reasons").replaceChildren(...reasons.map((reason) => plainItem(reason)));
 }
@@ -526,6 +643,7 @@ for (const radio of document.querySelectorAll<HTMLInputElement>("input[name='tie
 }
 
 $("starter").addEventListener("click", () => {
+  if (!available()) return;
   const button = $<HTMLButtonElement>("starter");
   if (button.dataset.armed !== "true" && cleanPack(state.pack).page.name) {
     button.dataset.armed = "true";
@@ -535,12 +653,14 @@ $("starter").addEventListener("click", () => {
   }
   button.dataset.armed = "";
   button.textContent = "Start a blank pack";
-  commitState({ ...editPack(state, starterPack(state.pack.tier)), checklist: { reviewedPage: false, profilePicture: false, coverPhoto: false } }, { renderForm: true });
-  setBanner({ tone: "info", title: `Blank ${state.pack.tier} pack ready.`, detail: "Fill in the client details, then open the Facebook view and plan it." });
+  commitState(replacePack(state, starterPack(state.pack.tier)), { renderForm: true });
+  setBanner({ tone: "info", title: `Blank ${state.pack.tier} pack ready.`, detail: "Previous progress and receipts were archived locally. Fill in the client details, then plan." });
 });
 
 $("import").addEventListener("click", () => $<HTMLInputElement>("import-file").click());
 $<HTMLInputElement>("import-file").addEventListener("change", async () => {
+  if (!available()) return;
+  const startedRevision = revision, generation = dataGeneration;
   const input = $<HTMLInputElement>("import-file");
   const file = input.files?.[0];
   input.value = "";
@@ -549,9 +669,11 @@ $<HTMLInputElement>("import-file").addEventListener("change", async () => {
   try {
     parsed = JSON.parse(await file.text());
   } catch (error) {
+    if (!available() || revision !== startedRevision || dataGeneration !== generation) return;
     setBanner({ tone: "bad", title: "That file is not valid JSON.", detail: (error as Error).message });
     return;
   }
+  if (!available() || revision !== startedRevision || dataGeneration !== generation) return;
   importPack(parsed);
 });
 
@@ -565,8 +687,8 @@ function importPack(parsed: unknown): void {
     return;
   }
   const merged = mergeDefaults(starterPack(check.pack.tier), parsed) as FacebookPack;
-  commitState(editPack(state, merged), { renderForm: true });
-  setBanner({ tone: "info", title: "Pack imported.", detail: check.errors.length ? "It still has errors; they are listed above the Plan button." : "Open the Facebook view and plan it." });
+  commitState(replacePack(state, merged), { renderForm: true });
+  setBanner({ tone: "info", title: "Pack imported; previous records archived locally.", detail: check.errors.length ? "It still has errors; they are listed above the Plan button." : "Open the Facebook view and plan it." });
 }
 
 $("export").addEventListener("click", () => {
@@ -583,11 +705,21 @@ $("export").addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
+$("version-save").addEventListener("click", () => {
+  const next = saveVersion(state);
+  if (next === state) {
+    setBanner({ tone: "info", title: "This version is already saved.", detail: "Edit the pack before saving another version." });
+    return;
+  }
+  commitState(next);
+  setBanner({ tone: "good", title: "Pack version saved locally.", detail: "It stays in this browser until cleared or replaced by the 20-version limit." });
+});
+
 planButton.addEventListener("click", () => { void planView(); });
 draftButton.addEventListener("click", () => { void draft(); });
 commitButton.addEventListener("click", () => { void approveAndCommit(); });
 $("receipt-download").addEventListener("click", () => {
-  if (!(state.receipts ?? []).length) return;
+  if (!available() || !(state.receipts ?? []).length) return;
   const receipt = buildSprintReceipt({ pack: state.pack, entries: state.receipts, extensionVersion: manifest.version });
   downloadJson(receiptFileName(receipt), receipt);
   setBanner({ tone: "good", title: "Sprint receipt downloaded.", detail: `${receipt.totals.approvals} approval(s), SHA-256 ${receipt.sha256.slice(0, 12)}…` });
@@ -607,13 +739,22 @@ $("clear").addEventListener("click", async () => {
     setTimeout(() => { button.dataset.armed = ""; button.textContent = "Clear All Local Data"; }, 5000);
     return;
   }
+  if (clearing) return;
   button.dataset.armed = "";
-  button.textContent = "Clear All Local Data";
-  await store.flush();
-  await clearAll(chrome.storage.local);
-  state = initialState();
-  render({ renderForm: true });
-  setBanner({ tone: "good", title: "Local data cleared.", detail: "Packs, plans, progress, the checklist, sprint receipts, and settings were erased from this browser. Nothing was ever synced to other devices." });
+  button.textContent = "Clearing..."; button.disabled = true;
+  clearing = true; dataGeneration += 1; revision += 1; copyPanel?.invalidate();
+  try {
+    await store.clear();
+    state = initialState();
+    $<HTMLInputElement>("ollama-model").value = "";
+    clearing = false; starting = false;
+    render({ renderForm: true });
+    setBanner({ tone: "warn", title: "Local data cleared in this panel.", detail: "Another panel or an already-started write can restore data. Close other panels, recheck and clear again if needed. Downloaded files and Facebook data are not erased. A Facebook action already dispatched may still finish; check Facebook directly." });
+  } catch {
+    clearing = false; starting = false;
+    render({ renderForm: true });
+    setBanner({ tone: "bad", title: "Could not clear local data.", detail: "Try Clear All again. Some data may remain." });
+  } finally { button.disabled = false; button.textContent = "Clear All Local Data"; }
 });
 
 chrome.tabs.onActivated.addListener(() => { void refreshActiveTab().then(() => render()); });
@@ -632,7 +773,7 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message: unknown, sender) => {
-  if (!isContentEvent(message)) return undefined;
+  if (!available() || !isContentEvent(message)) return undefined;
   if (sender.tab?.id == null || sender.tab.id !== state.session?.tabId) return undefined;
   onContentEvent(message);
   return undefined;
@@ -661,11 +802,13 @@ function onContentEvent(event: ContentEvent): void {
 // Optional copy drafting (offline facts, or a local Ollama on a click). Drafts edit the pack, and a
 // pack edit blocks Draft and Commit until the view is planned again, so drafted copy reaches
 // Facebook only through a fresh Plan -> Draft -> Approve & Commit.
-wireCopyPanel({
+copyPanel = wireCopyPanel({
   doc: document,
   fetch: window.fetch.bind(window),
-  storage: chrome.storage.local,
+  storage: { get: (key) => chrome.storage.local.get(key), set: (items) => store.write(items), clear: () => store.clear() },
   pack: () => state.pack,
+  revision: () => revision,
+  available,
   applyCopy(copy) {
     const pack = structuredClone(state.pack);
     if (copy.bio != null) setPath(pack, "page.bio", copy.bio);
@@ -679,13 +822,27 @@ wireCopyPanel({
 
 async function start(): Promise<void> {
   buildStaticControls();
+  const generation = dataGeneration;
   const saved = await load(chrome.storage.local);
-  if (saved) state = { pack: saved.pack, checklist: saved.checklist, progress: saved.progress, session: saved.session, receipts: saved.receipts ?? [] };
+  if (generation !== dataGeneration) return;
+  if (saved) {
+    state = { pack: saved.pack, checklist: saved.checklist, progress: saved.progress ?? [], session: saved.session, receipts: saved.receipts ?? [], versions: readVersions(saved.versions), archives: saved.archives ?? [] };
+    if (!saved.recordsScoped) {
+      const previous = state;
+      state = archiveRecords(state, true);
+      if (state !== previous) store.schedule(state);
+    }
+  }
+  starting = false;
   await refreshActiveTab();
+  if (generation !== dataGeneration) return;
   render({ renderForm: true });
   const session = state.session;
   if (!session || session.committedAt || session.stale) return;
-  const status = await send({ type: "pagepush:status" }, session.tabId);
+  const startedRevision = revision;
+  const current = (): boolean => available() && generation === dataGeneration && revision === startedRevision && state.session === session;
+  const status = await send({ type: "pagepush:status" }, session.tabId, current);
+  if (!current()) return;
   const holds = !("error" in status) && status.reply.ok && status.reply.plan?.planHash === session.plan.planHash;
   if (!holds) {
     commitState(invalidate(state, "The tab no longer holds this plan (it reloaded or navigated). Plan again."));

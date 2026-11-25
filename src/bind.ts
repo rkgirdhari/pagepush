@@ -21,10 +21,7 @@ export function bindPage(doc: Document): Page {
     const name = el.getAttribute("name") ?? "";
     if (type === "hidden") return;
     if (CAPTCHA_RESPONSES.includes(name)) return;
-    if (!el.id) {
-      generated += 1;
-      el.id = `pp-${generated}`;
-    }
+    if (!el.id) ensureId(el, `pp-${++generated}`);
     const rawLabels = readRawLabels(doc, el);
     const labels = rawLabels.map((label) => labelKey(label));
     controls.push({
@@ -56,6 +53,7 @@ export function captchaPresent(doc: Document): boolean {
         ".g-recaptcha",
         "iframe[src*='recaptcha']",
         "iframe[src*='hcaptcha']",
+        ".h-captcha",
         ".cf-turnstile",
         "iframe[src*='challenges.cloudflare.com']",
         "[data-sitekey]",
@@ -67,20 +65,49 @@ export function captchaPresent(doc: Document): boolean {
 
 export function captchaCleared(doc: Document): boolean {
   if (!captchaPresent(doc)) return true;
-  const boxes = doc.querySelectorAll(CAPTCHA_RESPONSES.map((name) => `[name='${name}']`).join(", "));
-  for (const box of boxes) {
-    const value = "value" in box ? String((box as HTMLTextAreaElement).value) : "";
-    if (value.trim()) return true;
-  }
-  return false;
+  const boxes = Array.from(doc.querySelectorAll(CAPTCHA_RESPONSES.map((name) => `[name='${name}']`).join(", ")));
+  if (!boxes.length || boxes.some((box) => !("value" in box) || !String((box as HTMLTextAreaElement).value).trim())) return false;
+
+  // Nested markers are one widget. Separate widgets each need a response, including same-provider widgets.
+  const markers = Array.from(doc.querySelectorAll(
+    ".g-recaptcha, iframe[src*='recaptcha'], iframe[src*='hcaptcha'], .h-captcha, .cf-turnstile, iframe[src*='challenges.cloudflare.com'], [data-sitekey]",
+  ));
+  const roots = markers.filter((marker) => !markers.some((other) => other !== marker && other.contains(marker)));
+  if (boxes.length < roots.length) return false;
+  const providers = [
+    { selector: ".g-recaptcha, iframe[src*='recaptcha']", name: "g-recaptcha-response" },
+    { selector: ".h-captcha, iframe[src*='hcaptcha']", name: "h-captcha-response" },
+    { selector: ".cf-turnstile, iframe[src*='challenges.cloudflare.com']", name: "cf-turnstile-response" },
+  ];
+  return providers.every(({ selector, name }) => {
+    const widgets = roots.filter((root) => root.matches(selector) || root.querySelector(selector));
+    const responses = boxes.filter((box) => box.getAttribute("name") === name);
+    if (responses.length < widgets.length) return false;
+    if (widgets.length < 2) return true;
+    // Do not let two tokens in one widget stand in for another widget. External tokens are
+    // acceptable only when one unmatched widget and one unassigned token remain.
+    const unmatched = widgets.filter((root) => !responses.some((box) => root.contains(box)));
+    const external = responses.filter((box) => !widgets.some((root) => root.contains(box)));
+    return unmatched.length === 0 || (unmatched.length === 1 && external.length === 1);
+  });
 }
 
 export function locate(doc: Document, id: string): Element | null {
-  return doc.getElementById(id);
+  // getElementById alone silently chooses one of several controls with the same ID.
+  const first = doc.getElementById(id);
+  if (!first) return null;
+  const found = Array.from(doc.querySelectorAll("[id]")).filter((el) => el.id === id);
+  return found.length === 1 && found[0] === first ? first : null;
 }
 
 export function ensureId(el: Element, fallback: string): string {
-  if (!el.id) el.id = fallback;
+  if (!el.id) {
+    const doc = el.ownerDocument;
+    let id = fallback;
+    let suffix = 0;
+    while (doc?.getElementById(id)) id = `${fallback}-${++suffix}`;
+    el.id = id;
+  }
   return el.id;
 }
 
@@ -308,10 +335,11 @@ export function clickElement(el: Element): void {
   el.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
 }
 
-export function clickAdd(root: Element, addLabel: string): boolean {
+export function clickAdd(root: Element, addLabel: string, guard?: (target: Element) => void): boolean {
   const want = labelKey(addLabel);
   for (const button of root.querySelectorAll("button")) {
     if (labelKey(button.textContent ?? "") === want) {
+      guard?.(button);
       clickElement(button);
       return true;
     }
@@ -329,17 +357,18 @@ export async function ensureCount(
   count: number,
   addLabel?: string,
   settleMs = DEFAULT_SETTLE_MS,
+  guard?: (target: Element) => void,
 ): Promise<Element[]> {
   let inputs = inputsByLabel(root, label);
-  let guard = 0;
+  let attempts = 0;
   const doc = root.ownerDocument;
-  while (inputs.length < count && addLabel && doc && guard < count + 1) {
+  while (inputs.length < count && addLabel && doc && attempts < count + 1) {
     const before = inputs.length;
-    if (!clickAdd(root, addLabel)) break;
+    if (!clickAdd(root, addLabel, guard)) break;
     const grew = await settle(doc, () => inputsByLabel(root, label).length > before, { timeoutMs: settleMs });
     inputs = inputsByLabel(root, label);
     if (!grew) break;
-    guard += 1;
+    attempts += 1;
   }
   return inputs;
 }

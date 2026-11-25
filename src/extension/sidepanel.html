@@ -93,7 +93,7 @@
 
   <div id="banner" class="banner" role="status" aria-live="polite" data-tone="info">
     <strong id="banner-title">Open your Facebook Business Page and fill in the client pack.</strong>
-    <span id="banner-detail">Nothing is saved or posted on Facebook until you click Approve &amp; Commit.</span>
+    <span id="banner-detail">Draft enters values on Facebook. Page Push clicks the final action only after you approve; check the result on Facebook.</span>
   </div>
 
   <section class="card" aria-labelledby="tier-heading">
@@ -113,6 +113,7 @@
 
   <form id="pack-form" class="card" autocomplete="off" aria-labelledby="pack-heading">
     <h2 id="pack-heading">Client pack</h2>
+    <p class="muted">Pack values are stored locally. Do not enter passwords, access tokens, or other credentials.</p>
 
     <fieldset data-fields="pageName,categories,bio" style="border:0;padding:0;margin:0">
       <h3>Page</h3>
@@ -174,14 +175,23 @@
 
     <fieldset data-fields="profilePicture,coverPhoto" style="border:0;padding:0;margin:0">
       <h3>Images (you upload these on Facebook)</h3>
+      <p class="muted">Required photos block approval when Facebook presents their upload controls on the current view. Check all photos yourself before finishing.</p>
       <div class="grid2">
         <div><label class="field" for="media-profile">Profile picture</label>
-          <select id="media-profile" data-path="media.profilePicture"><option value="required">Required before commit</option><option value="optional">Optional</option></select></div>
+          <select id="media-profile" data-path="media.profilePicture"><option value="required">Required on upload view</option><option value="optional">Optional</option></select></div>
         <div><label class="field" for="media-cover">Cover photo</label>
-          <select id="media-cover" data-path="media.coverPhoto"><option value="required">Required before commit</option><option value="optional">Optional</option></select></div>
+          <select id="media-cover" data-path="media.coverPhoto"><option value="required">Required on upload view</option><option value="optional">Optional</option></select></div>
       </div>
     </fieldset>
   </form>
+
+  <section class="card" aria-labelledby="versions-heading">
+    <h2 id="versions-heading">Version history</h2>
+    <p class="muted">Save up to 20 versions of this client pack in this browser. Versions contain your pack values. Restoring saves the current pack first and requires a new plan; it does not change Facebook.</p>
+    <div class="row"><button id="version-save" type="button">Save current version</button></div>
+    <p id="version-status" class="muted" role="status" aria-live="polite">No versions saved yet.</p>
+    <ol id="version-list" class="plain" aria-label="Saved pack versions"></ol>
+  </section>
 
   <section class="card" id="copy-card" aria-labelledby="copy-heading">
     <h2 id="copy-heading">Draft bio &amp; launch post</h2>
@@ -260,14 +270,15 @@
 
   <section class="card" aria-labelledby="receipt-heading">
     <h2 id="receipt-heading">Sprint receipt</h2>
-    <p class="muted" id="receipt-summary">No approvals yet. Each Approve &amp; Commit is recorded here for the client.</p>
-    <p class="muted">The receipt lists plan hashes, times, the tier, the Facebook view, which fields were drafted and committed, and the checklist as you ticked it. It holds field names, not their values, and it is saved only when you click download.</p>
+    <p class="muted" id="receipt-summary">No commit attempts recorded yet.</p>
+    <p class="muted">Receipts include the Page name, Facebook Page address or ID, plan hashes, times, tier, field names and checklist. Refusal messages may include additional page or client information. Review before sharing. Attempts do not confirm Facebook success; the checksum is not a signature.</p>
     <div class="row"><button id="receipt-download" type="button" class="grow" disabled>Download sprint receipt (JSON)</button></div>
   </section>
 
   <section class="card" aria-labelledby="data-heading">
     <h2 id="data-heading">Local data</h2>
-    <p class="muted">Packs, plans, and the checklist stay in this browser (chrome.storage.local). Nothing is synced or sent anywhere.</p>
+    <p class="muted">Packs, saved versions, plans, and the checklist stay in this browser. Drafting enters values into Facebook; optional Ollama requests go to your local Ollama server.</p>
+    <p id="clear-warning" class="muted">Clear All coordinates only this panel. Other open Page Push panels or already-started writes can restore old packs, receipts or settings after clearing. Wait for other panels' activity to stop and close them before clearing; recheck and clear again if needed. Erasure across panels is not guaranteed. Downloaded files and Facebook data are not erased.</p>
     <button id="clear" type="button" class="danger">Clear All Local Data</button>
   </section>
 

@@ -4,3 +4,5 @@ models/weights/
 *.gguf
 native/candle-drafter/target/
 dist/
+website/.manus-webdev/
+.manus/mcp-results/

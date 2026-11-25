@@ -78,17 +78,18 @@ test("a required image gate needs its checklist tick", () => {
   assert.equal(commitReadiness(state, here).ok, true);
 });
 
-test("a committed plan cannot be committed again, and progress survives into the next view", () => {
-  const committed = recordCommit(reviewed(drafted(planned())), new Date("2026-11-24T12:00:00Z"));
-  assert.equal(commitReadiness(committed, here).ok, false);
-  assert.ok(commitReadiness(committed, here).reasons[0]!.startsWith("This plan was already committed"));
-  const byField = Object.fromEntries(committed.progress.map((entry) => [entry.fieldId, entry.status]));
-  assert.equal(byField.website, "committed");
-  assert.equal(byField.publishPost, "committed");
-  assert.equal(committed.progress.every((entry) => entry.url === PAGE_URL), true);
+test("an attempted plan cannot be committed again, and unverified progress survives into the next view", () => {
+  const attempted = recordCommit(reviewed(drafted(planned())), new Date("2026-11-24T12:00:00Z"));
+  assert.deepEqual(commitReadiness(attempted, here), { ok: false, reasons: ["This plan was already attempted. Check Facebook before planning another view."] });
+  assert.equal(draftReadiness(attempted, here).ok, false);
+  const byField = Object.fromEntries(attempted.progress.map((entry) => [entry.fieldId, entry.status]));
+  assert.equal(byField.website, "attempted");
+  assert.equal(byField.publishPost, "attempted");
+  assert.ok(attempted.progress.every((entry) => entry.status === "attempted" && entry.url === PAGE_URL));
+  assert.equal(attempted.session!.committedAt, "2026-11-24T12:00:00.000Z");
 
-  const next = startSession(committed, TAB, planFacebook(facebookDoc({ view: "create" }), committed.pack, "https://www.facebook.com/pages/create"));
-  assert.equal(next.progress.length, committed.progress.length, "a new view keeps earlier progress");
+  const next = startSession(attempted, TAB, planFacebook(facebookDoc({ view: "create" }), attempted.pack, "https://www.facebook.com/pages/create"));
+  assert.deepEqual(next.progress, attempted.progress, "a new view keeps earlier unverified progress");
   assert.equal(next.session!.committedAt, undefined);
 });
 

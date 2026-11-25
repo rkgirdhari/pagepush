@@ -3,6 +3,7 @@
 import type { ApplyResult, FacebookPack, FillPlan } from "../browser.ts";
 import { fieldById, packFingerprint, starterPack } from "./packs.ts";
 import { receiptEntry, type ReceiptEntry } from "./receipt.ts";
+import type { PackVersion } from "./version-history.ts";
 
 export interface Checklist {
   /** The operator read every drafted field on the Facebook page. Reset on every draft. */
@@ -14,7 +15,7 @@ export interface Checklist {
 export interface ProgressEntry {
   fieldId: string;
   label: string;
-  status: "drafted" | "committed";
+  status: "drafted" | "attempted" | "committed"; // committed is a legacy, unverified status
   url: string;
   planHash: string;
   at: string;
@@ -33,6 +34,15 @@ export interface Session {
   committedAt?: string;
 }
 
+export interface RecordArchive {
+  pageName: string;
+  tier: FacebookPack["tier"];
+  receipts: ReceiptEntry[];
+  progress: ProgressEntry[];
+  /** Legacy records may already have been mixed; never attribute them to the current pack. */
+  unverifiedOwner?: boolean;
+}
+
 export interface PanelState {
   pack: FacebookPack;
   checklist: Checklist;
@@ -40,6 +50,9 @@ export interface PanelState {
   session: Session | null;
   /** One audit entry per Approve & Commit click, exported as the sprint receipt. */
   receipts: ReceiptEntry[];
+  /** Explicit snapshots of client-pack values stored only on this device. */
+  versions: PackVersion[];
+  archives?: RecordArchive[];
 }
 
 export interface Context {
@@ -59,14 +72,15 @@ export function initialState(): PanelState {
     progress: [],
     session: null,
     receipts: [],
+    versions: [],
   };
 }
 
-export function startSession(state: PanelState, tabId: number, plan: FillPlan): PanelState {
+export function startSession(state: PanelState, tabId: number, plan: FillPlan, submittedPrint = packFingerprint(state.pack)): PanelState {
   return {
     ...state,
     checklist: { ...state.checklist, reviewedPage: false },
-    session: { tabId, url: plan.pageUrl, plan, packPrint: packFingerprint(state.pack), drift: [] },
+    session: { tabId, url: plan.pageUrl, plan, packPrint: submittedPrint, drift: [] },
   };
 }
 
@@ -76,7 +90,27 @@ export function invalidate(state: PanelState, reason: string): PanelState {
   return { ...state, session: { ...state.session, stale: reason } };
 }
 
+export function archiveRecords(state: PanelState, unverifiedOwner = false): PanelState {
+  if (!state.progress.length && !(state.receipts ?? []).length) return state;
+  const archive: RecordArchive = {
+    pageName: unverifiedOwner ? "" : (state.pack.page?.name?.trim() ?? ""),
+    tier: state.pack.tier,
+    progress: structuredClone(state.progress), receipts: structuredClone(state.receipts ?? []),
+    ...(unverifiedOwner ? { unverifiedOwner: true } : {}),
+  };
+  return { ...state, archives: [...(state.archives ?? []), archive], progress: [], receipts: [] };
+}
+
+/** Explicit replacement always creates a fresh work context, even for identical pack contents. */
+export function replacePack(state: PanelState, pack: FacebookPack): PanelState {
+  return { ...archiveRecords(state), pack, session: null,
+    checklist: { reviewedPage: false, profilePicture: false, coverPhoto: false } };
+}
+
 export function editPack(state: PanelState, pack: FacebookPack): PanelState {
+  if ((state.pack.page?.name ?? "").trim() !== (pack.page?.name ?? "").trim()) {
+    return replacePack(state, pack);
+  }
   return { ...state, pack };
 }
 
@@ -115,7 +149,7 @@ export function recordCommit(state: PanelState, at = new Date(), approvedAt = at
   if (!session) return state;
   const stamp = at.toISOString();
   const done = session.plan.actions.filter((action) => action.phase === "commit" || session.drafted?.applied.includes(action.id));
-  const receipt = receiptEntry({ session, pack: state.pack, checklist: state.checklist, approvedAt, finishedAt: at, outcome: "committed" });
+  const receipt = receiptEntry({ session, pack: state.pack, checklist: state.checklist, approvedAt, finishedAt: at, outcome: "attempted" });
   return {
     ...state,
     receipts: [...(state.receipts ?? []), receipt],
@@ -123,7 +157,7 @@ export function recordCommit(state: PanelState, at = new Date(), approvedAt = at
     progress: mergeProgress(state.progress, done.map((action) => ({
       fieldId: action.id,
       label: action.label,
-      status: "committed" as const,
+      status: "attempted" as const,
       url: session.url,
       planHash: session.plan.planHash,
       at: stamp,
@@ -144,7 +178,7 @@ export function recordCommitRefused(
   if (!session) return state;
   const at = input.at ?? new Date();
   const applied = input.applied ?? [];
-  const outcome = applied.length ? "partial" : "refused";
+  const outcome = applied.length || ["unconfirmed", "unknown-dispatch", "error"].includes(input.code) ? "partial" : "refused";
   const receipt = receiptEntry({
     session,
     pack: state.pack,
@@ -164,12 +198,12 @@ export function recordCommitRefused(
     progress: mergeProgress(state.progress, done.map((action) => ({
       fieldId: action.id,
       label: action.label,
-      status: "committed" as const,
+      status: "attempted" as const,
       url: session.url,
       planHash: session.plan.planHash,
       at: stamp,
     }))),
-  }, "Part of this commit ran. Check the page before planning again.");
+  }, "Part of this commit ran or may have run. Check Facebook before planning again; do not retry blindly.");
 }
 
 /** One entry per field: committed beats drafted, newer beats older. */
@@ -191,7 +225,7 @@ function sessionBlocks(state: PanelState, context: Context): string[] {
   const session = state.session;
   if (!session) return ["Plan this view first."];
   const reasons: string[] = [];
-  if (session.committedAt) reasons.push("This plan was already committed. Plan the next view.");
+  if (session.committedAt) reasons.push("This plan was already attempted. Check Facebook before planning another view.");
   if (session.stale) reasons.push(session.stale);
   if (context.activeTabId !== session.tabId) reasons.push("Switch back to the Facebook tab you planned, or plan this tab.");
   if (packFingerprint(state.pack) !== session.packPrint) reasons.push("The pack changed after planning. Plan again.");

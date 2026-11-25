@@ -83,7 +83,9 @@ export function prepareFacebookPack(pack: FacebookPack): { pack: FacebookPack; i
       if (typeof value === "string") next.contact[key] = value.trim();
     }
   }
-  if (next.hours) next.hours.mode = next.hours.mode.trim();
+  // The panel's Not set choice can leave a schedule without a mode. Do not draft it.
+  if (next.hours && (typeof next.hours.mode !== "string" || !next.hours.mode.trim())) delete next.hours;
+  else if (next.hours) next.hours.mode = next.hours.mode.trim();
   if (next.cta) {
     next.cta.type = next.cta.type.trim();
     if (next.cta.url != null) next.cta.url = next.cta.url.trim();
@@ -119,16 +121,17 @@ export function prepareFacebookPack(pack: FacebookPack): { pack: FacebookPack; i
 export function assessFacebook(pack: FacebookPack): PlanIssue[] {
   const issues: PlanIssue[] = [];
   for (const path of secretPaths(pack)) {
-    issues.push(issue("error", path, "secret", `The pack holds something that looks like a credential at ${path}. Remove it; Page Push never stores sign-in details.`));
+    issues.push(issue("error", path, "secret", `The pack holds something that looks like a credential at ${path}. Remove it; do not enter sign-in details in a pack.`));
   }
   if (!pack.page?.name?.trim()) issues.push(issue("error", "pageName", "required", "The pack needs the Page name."));
   const categories = asStringList(pack.page?.categories) ?? [];
   if (!categories.length) issues.push(issue("error", "categories", "required", "The pack needs at least one Page category."));
   const modes = (facebookSchema.rules?.hoursModes ?? []) as string[];
-  if (pack.hours && !modes.some((mode) => labelKey(mode) === labelKey(pack.hours!.mode))) {
+  const hoursMode = typeof pack.hours?.mode === "string" ? pack.hours.mode.trim() : "";
+  if (hoursMode && !modes.some((mode) => labelKey(mode) === labelKey(hoursMode))) {
     issues.push(issue("error", "hoursMode", "enum", `Hours must be one of: ${modes.join(", ")}.`));
   }
-  if (pack.hours?.schedule && labelKey(pack.hours.mode) !== labelKey("Open on selected hours")) {
+  if (pack.hours?.schedule && labelKey(hoursMode) !== labelKey("Open on selected hours")) {
     issues.push(issue("warning", "hoursMode", "schedule-ignored", "Opening times only apply to \"Open on selected hours\"."));
   }
   if (pack.cta && !pack.cta.url && !/call|message|email/i.test(pack.cta.type)) {

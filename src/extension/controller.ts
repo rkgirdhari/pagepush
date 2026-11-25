@@ -6,13 +6,16 @@
 // - After a draft, a trusted edit to a planned control marks it as drift and tells the panel.
 // - A commit consumes the plan: the same approval never clicks Post or Save twice.
 import {
+  approve,
   checkDrift,
   CommitRefused,
   executeCommit,
   executeDraft,
   planFacebook,
+  sha256,
   type FillPlan,
 } from "../browser.ts";
+import { planInstanceId } from "../plan.ts";
 import type { ContentEvent, ContentReply, PanelRequest } from "./messages.ts";
 
 export interface ControllerDeps {
@@ -41,6 +44,7 @@ export function createController(deps: ControllerDeps): Controller {
   let lastUrl = deps.location.href;
   /** A draft or commit in flight. A second one is refused instead of interleaving writes. */
   let working = false;
+  let disposed = false;
 
   const onEdit = (event: Event): void => {
     if (!active || !drafted || !isUserEdit(event)) return;
@@ -118,6 +122,8 @@ export function createController(deps: ControllerDeps): Controller {
           return { ok: true, url, ...state() };
         case "pagepush:plan":
           active = planFacebook(doc, request.pack, url);
+          // The panel only sends a hash. Its hash names this instance, not just equal content.
+          active.planHash = sha256({ contentHash: active.planHash, instance: planInstanceId(active) });
           drafted = false;
           drift = new Set();
           dialogs = dialogCount();
@@ -130,11 +136,14 @@ export function createController(deps: ControllerDeps): Controller {
           working = true;
           let draft;
           try {
-            draft = await executeDraft(doc, plan, { settleMs: deps.settleMs });
+            draft = await executeDraft(doc, plan, { settleMs: deps.settleMs, currentUrl: () => deps.location.href, isCurrent: () => !disposed && active === plan });
           } finally {
             working = false;
           }
-          if (active !== plan) return { ok: false, url: deps.location.href, code: "context", message: "The page changed while drafting. Plan this view again." };
+          if (disposed || active !== plan || deps.location.href !== plan.pageUrl) {
+            if (active === plan) active = null;
+            return { ok: false, url: deps.location.href, code: "context", message: "The page changed while drafting. Plan this view again." };
+          }
           drafted = true;
           drift = new Set();
           return { ok: true, url, draft, ...state() };
@@ -156,11 +165,16 @@ export function createController(deps: ControllerDeps): Controller {
           drafted = false;
           working = true;
           try {
-            await executeCommit(doc, plan, { planHash: request.planHash, approvedAt: new Date().toISOString() }, { settleMs: deps.settleMs });
+            await executeCommit(doc, plan, approve(plan), {
+              settleMs: deps.settleMs,
+              currentUrl: () => deps.location.href,
+              isCurrent: () => !disposed,
+            });
           } catch (error) {
-            // Refused before anything was clicked (captcha, missing file, stale field): the plan
-            // and its draft still stand, so the person can fix the page and approve again.
-            if (error instanceof CommitRefused && error.applied.length === 0 && error.code !== "unconfirmed") {
+            // Only correctable pre-click gate refusals retain the plan. A stale or uncertain
+            // attempt consumes it; never automatically retry a possible activation.
+            if (error instanceof CommitRefused && error.applied.length === 0 && ["captcha", "file", "blocked"].includes(error.code)
+              && !disposed && deps.location.href === plan.pageUrl) {
               active = plan;
               drafted = true;
             }
@@ -168,20 +182,25 @@ export function createController(deps: ControllerDeps): Controller {
           } finally {
             working = false;
           }
-          return { ok: true, url, plan, committed: true };
+          if (disposed || deps.location.href !== plan.pageUrl) {
+            return { ok: false, url: deps.location.href, code: "context", message: "The page changed during commit. Do not retry without reviewing the page." };
+          }
+          return { ok: true, url: deps.location.href, plan, committed: true };
         }
       }
     } catch (error) {
       if (error instanceof CommitRefused) {
-        return { ok: false, url, code: error.code, message: error.message, applied: [...error.applied] };
+        return { ok: false, url: deps.location.href, code: error.code, message: error.message, applied: [...error.applied] };
       }
-      return { ok: false, url, code: "error", message: error instanceof Error ? error.message : String(error) };
+      return { ok: false, url: deps.location.href, code: "error", message: error instanceof Error ? error.message : String(error) };
     }
   }
 
   return {
     handle,
     dispose() {
+      disposed = true;
+      active = null;
       doc.removeEventListener("input", onEdit, true);
       doc.removeEventListener("change", onEdit, true);
       observer?.disconnect();

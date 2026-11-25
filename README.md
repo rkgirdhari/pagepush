@@ -1,8 +1,16 @@
-# Page Push submission layer
+# Page Push
 
-Page Push fills high-stakes forms the person already has open. Facebook stays a separate proof of concept. The offers in this package are a **Hackathon Submission Sprint** ($25, one project pack across the hackathon forms on screen) and an **AppSumo Application Service** ($200, one partner listing).
+The browser extension in `dist/` assists with Facebook Business Page setup. It drafts into the
+open page before approval; a person reviews the result and explicitly approves each attempted final
+save, creation, or post. Facebook may process draft values earlier and outcomes must be checked there.
+Its setup-sprint tiers are Essentials ($5), Standard Business ($15), and Full Launch + Post ($50).
+Facebook behavior has fixture coverage, but the end-to-end live Chrome release check is still open.
 
-A run has four steps:
+The repository also contains Devpost and AppSumo submission-layer libraries and tests. They are
+not wired into the shipped browser extension. Their example offers are a **Hackathon Submission
+Sprint** ($25) and an **AppSumo Application Service** ($200).
+
+The library submission flow has four steps:
 
 1. The person signs in and opens the submission form.
 2. `planDevpost` or `planAppSumo` reads that page and builds a plan from the pack.
@@ -22,8 +30,8 @@ Files the browser will not accept from a script (thumbnails, the AppSumo hero, s
 | `examples/` | A Northline pack for each platform |
 | `src/shims/devpost.ts` | Plan a page, or a sprint across several open hackathon pages |
 | `src/shims/appsumo.ts` | Plan the partner editor, plus `renderListingPaste` when the editor is not open |
-| `schemas/schema_facebook.json` | Business Page field map, the $5 / $15 / $50 tiers, and Page-admin signals (labels unverified until Phase 5) |
-| `src/shims/facebook.ts` | Plan a Business Page creation or settings view; refuses personal profiles and other Pages |
+| `schemas/schema_facebook.json` | Business Page field map, the $5 / $15 / $50 tiers, and Page-admin signals (hours remain unverified live) |
+| `src/shims/facebook.ts` | Plan a Business Page creation or settings view; guard checks for the intended Page name and admin signals outside creation |
 | `docs/research/facebook-dom.md` | How Facebook's Lexical composer and React inputs accept text |
 | `src/plan.ts` | Label binding, limits, and the plan hash |
 | `src/execute.ts` | Draft, phone confirm, commit |
@@ -96,20 +104,52 @@ If AppSumo fields come back unconfirmed, `recoverListing` returns the same markd
 
 ## Sprint receipts and local data
 
-Every Approve & Commit adds an entry to a local sprint receipt: plan hash, approval time, tier, the
-Facebook view (tracking parameters stripped), drafted and committed field names, and the checklist.
-**Download sprint receipt (JSON)** saves it with a SHA-256 over its own body (`verifySprintReceipt`
-in `src/extension/receipt.ts` checks it). Receipts hold field names, never values. **Clear All
-Local Data** (two clicks) erases `chrome.storage.local`; `chrome.storage.sync` is never used, and
-`npm run lint` fails the build if it ever is. Store disclosures are in
-[docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md).
+An approval that reaches the commit step can add an attempted, partial, or refused entry to a local
+sprint receipt; a click that fails earlier verification may not be recorded. An attempted action is
+not proof that Facebook saved, created, or published anything. Check Facebook directly and do not
+retry blindly, especially after an uncertain or partial result. Legacy committed entries are
+exported as attempted, not confirmed.
+
+**Download sprint receipt (JSON)** includes the Page name when attributable, a redacted Facebook
+URL (its path and `id` and `sk` query parameters are retained, so a Page ID can remain), plan
+hashes, timestamps, tier, field IDs and labels, checklist, and any refusal code and message. The
+receipt does not separately include drafted field values, but the Page name, URL, labels, and
+unredacted refusal text can contain identifying or other sensitive information; review it before
+sharing. Its SHA-256 checksum (`verifySprintReceipt` checks it) is not a signature and can be
+recomputed.
+
+Replacing a pack (including starting blank, importing, restoring a version, or changing its Page
+name) archives existing progress and receipts locally and starts a fresh record for the new pack.
+Prior progress can be viewed and archived receipts downloaded. Older records with uncertain
+ownership are marked unknown and may be mixed. **Clear current progress and receipts** clears only
+the current record after confirmation; it leaves archives and pack versions. There is no individual
+archive-delete control: **Clear All Local Data** removes all local archives and other extension
+data after confirmation. Exported pack and receipt files must be deleted separately.
+
+Wait for other panels' work to finish, close other Page Push panels/windows before Clear All, and
+keep them closed until it finishes: each panel has its own write queue, so another panel can write
+stale data back after the erase. A Facebook action already dispatched may still finish; check
+Facebook. If clearing fails, retry. The extension
+uses `chrome.storage.local`, never `chrome.storage.sync`; `npm run lint` checks that restriction.
+Store disclosures are in [docs/CHROME_WEB_STORE.md](docs/CHROME_WEB_STORE.md).
+
+## Client-pack version history
+
+Use **Save current version** to keep a local snapshot of the client pack. Up to 20 recent snapshots
+are retained across packs in this browser and contain the pack's values; a snapshot matching the
+newest is not added. Restore a listed version to replace the current pack; Page Push first saves
+the current pack unless it matches the newest snapshot, archives existing progress and receipts,
+clears the previous plan and checklist, and requires a new plan. Restoring does not write anything
+to Facebook. **Clear All Local Data** also removes these snapshots.
 
 ## Bio and launch-post drafting in the side panel
 
 The side panel card "Draft bio & launch post" has an offline draft that needs nothing installed, and
 an optional local Ollama path (`http://localhost:11434`, default model `qwen3`) with one-click
 **Check / Load Model** and **Draft Copy with Ollama**. Drafts go into the pack for review and reach
-Facebook only through Plan → Draft → Approve & Commit. Setup, the checks a model draft must pass, and
+Facebook when you click Draft after planning, before final approval. Facebook may process it then;
+Approve & Commit attempts the final action, which you must verify on Facebook. A real Ollama check
+is still pending. Setup, the checks a model draft must pass, and
 the Windows `OLLAMA_ORIGINS` fix for HTTP 403 are in [docs/OLLAMA.md](docs/OLLAMA.md).
 
 ## Local Qwen3 draft
