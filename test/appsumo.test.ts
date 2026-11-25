@@ -22,7 +22,7 @@ function ready(submit = true): { doc: Document; pack: AppSumoPack } {
   };
 }
 
-test("draft fills the partner editor and submit waits for the phone confirm", () => {
+test("draft fills the partner editor and submit waits for the phone confirm", async () => {
   const { doc, pack: listing } = ready(true);
   const submitClicks = { count: 0 };
   doc.getElementById("submit-review")!.addEventListener("click", () => { submitClicks.count += 1; });
@@ -30,7 +30,7 @@ test("draft fills the partner editor and submit waits for the phone confirm", ()
   assert.equal(plan.offer.name, "AppSumo Application Service");
   assert.equal(plan.offer.priceUsd, 200);
   assert.deepEqual(plan.errors, [], JSON.stringify(plan.errors, null, 2));
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.deepEqual(draft.unconfirmed, [], JSON.stringify({ warnings: plan.warnings, actions: plan.actions.map((item) => item.id) }, null, 2));
   assert.equal((doc.getElementById("product-name") as HTMLInputElement).value, "Northline");
   assert.equal((doc.getElementById("usp") as HTMLInputElement).value, pack.story.usp);
@@ -51,27 +51,27 @@ test("draft fills the partner editor and submit waits for the phone confirm", ()
 
   const again = planAppSumo(doc, listing, "https://partners.appsumo.com/self-submission/demo/build");
   assert.equal(again.planHash, plan.planHash);
-  assert.throws(() => executeCommit(doc, plan, approve(plan)), (error: unknown) => {
+  await assert.rejects(() => executeCommit(doc, plan, approve(plan)), (error: unknown) => {
     return error instanceof CommitRefused && error.code === "file";
   });
   attachFiles(doc, "icon", ["icon.png"]);
   attachFiles(doc, "hero", ["hero.png"]);
   attachFiles(doc, "shots", ["hours.png", "portal.png"]);
-  executeCommit(doc, plan, approve(plan));
+  await executeCommit(doc, plan, approve(plan));
   assert.equal(submitClicks.count, 1);
 });
 
-test("submit for review stays unclicked until the partner approves the draft", () => {
+test("submit for review stays unclicked until the partner approves the draft", async () => {
   const { doc, pack: listing } = ready(false);
   const plan = planAppSumo(doc, listing);
   assert.equal(plan.errors.some((item) => item.code === "approval"), true);
-  executeDraft(doc, plan);
-  assert.throws(() => executeCommit(doc, plan, approve(plan)), (error: unknown) => {
+  await executeDraft(doc, plan);
+  await assert.rejects(() => executeCommit(doc, plan, approve(plan)), (error: unknown) => {
     return error instanceof CommitRefused && error.code === "blocked";
   });
 });
 
-test("a taxonomy slug on the option value is accepted", () => {
+test("a taxonomy slug on the option value is accepted", async () => {
   const doc = load(`
     <div data-widget>
       <label for="alternative">Alternative to</label>
@@ -88,12 +88,12 @@ test("a taxonomy slug on the option value is accepted", () => {
     product: { ...pack.product, alternativeTo: ["mondaycom"] },
   });
   assert.equal(plan.errors.some((item) => item.code === "taxonomy-miss"), false, JSON.stringify(plan.errors));
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.equal(draft.unconfirmed.includes("alternativeTo"), false, draft.unconfirmed.join(","));
   assert.equal(doc.querySelector("[role='option']")?.getAttribute("aria-selected"), "true");
 });
 
-test("unknown taxonomy values and over-limit copy are not written", () => {
+test("unknown taxonomy values and over-limit copy are not written", async () => {
   const doc = readyAppSumo();
   const missed = planAppSumo(doc, {
     ...pack,
@@ -101,7 +101,7 @@ test("unknown taxonomy values and over-limit copy are not written", () => {
     attestations: { submitForReview: true },
   });
   assert.equal(missed.errors.some((item) => item.code === "taxonomy-miss"), true);
-  executeDraft(doc, missed);
+  await executeDraft(doc, missed);
   assert.equal((doc.getElementById("alternative") as HTMLInputElement).value, "");
 
   const longDoc = readyAppSumo();
@@ -111,11 +111,11 @@ test("unknown taxonomy values and over-limit copy are not written", () => {
     attestations: { submitForReview: true },
   });
   assert.equal(long.errors.some((item) => item.fieldId === "usp"), true);
-  executeDraft(longDoc, long);
+  await executeDraft(longDoc, long);
   assert.equal((longDoc.getElementById("usp") as HTMLInputElement).value, "");
 });
 
-test("voice warnings do not block a draft, and an entry tier over $49 is a warning", () => {
+test("voice warnings do not block a draft, and an entry tier over $49 is a warning", async () => {
   const doc = readyAppSumo();
   const dashed = "Client retainer tracking, for agencies";
   const withDash = `${dashed.slice(0, 20)}\u2014${dashed.slice(20)}`;
@@ -126,7 +126,7 @@ test("voice warnings do not block a draft, and an entry tier over $49 is a warni
   });
   assert.equal(plan.warnings.some((item) => item.code === "em-dash"), true);
   assert.equal(plan.errors.some((item) => item.fieldId === "tagline"), false);
-  executeDraft(doc, plan);
+  await executeDraft(doc, plan);
   assert.equal((doc.getElementById("tagline") as HTMLInputElement).value, withDash);
 
   const pricey = assessAppSumo({
@@ -136,7 +136,7 @@ test("voice warnings do not block a draft, and an entry tier over $49 is a warni
   assert.equal(pricey.some((item) => item.code === "entry-price"), true);
 });
 
-test("the paste fallback follows the listing brief and reports submit gaps", () => {
+test("the paste fallback follows the listing brief and reports submit gaps", async () => {
   const pasted = renderListingPaste(pack);
   assert.equal(pasted.issues.filter((item) => item.level === "error").length, 0);
   for (const heading of ["## Basic information", "## Media", "## Highlighted features", "## Pricing", "## Product story", "## FAQ"]) {
@@ -154,7 +154,7 @@ test("the paste fallback follows the listing brief and reports submit gaps", () 
   assert.equal(gap.issues.some((item) => item.fieldId === "webhookUrl"), true);
 });
 
-test("a sign-in form is refused and a fresh editor still grows rows from one", () => {
+test("a sign-in form is refused and a fresh editor still grows rows from one", async () => {
   const login = load(`<label for="email">Email</label><input id="email"><label for="password">Password</label><input id="password" type="password">`);
   const refused = planAppSumo(login, { ...pack, attestations: { submitForReview: true } });
   assert.equal(refused.actions.length, 0);
@@ -165,6 +165,6 @@ test("a sign-in form is refused and a fresh editor still grows rows from one", (
   wireGrowth(doc);
   const plan = planAppSumo(doc, { ...pack, attestations: { submitForReview: true } });
   assert.equal(plan.errors.length, 0, JSON.stringify(plan.errors));
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.equal(draft.unconfirmed.length, 0);
 });

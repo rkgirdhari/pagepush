@@ -236,6 +236,8 @@ export function bannerFor(code: string, message?: string): Banner {
       return { tone: "bad", title: "A commit step did not stick.", detail: message };
     case "blocked":
       return { tone: "bad", title: "The plan has errors.", detail: message };
+    case "busy":
+      return { tone: "info", title: "Still writing to the page.", detail: "Wait for the current draft or commit to finish." };
     default:
       return { tone: "bad", title: "Something went wrong.", detail: message };
   }

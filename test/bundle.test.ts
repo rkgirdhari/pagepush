@@ -37,31 +37,31 @@ test("the bundled content script plans, drafts, and commits through chrome.runti
   new Function("chrome", "document", "location", code)(chromeStub, doc, { href: PAGE_URL });
   assert.ok(listener, "content script registered a message listener");
 
-  const ask = (request: PanelRequest): ContentReply => {
-    let answer: ContentReply | undefined;
-    listener!(request, {}, (value) => { answer = value; });
-    assert.ok(answer, request.type);
-    return answer!;
-  };
+  // The listener answers asynchronously and returns true to keep the channel open.
+  const ask = (request: PanelRequest): Promise<ContentReply> =>
+    new Promise((resolve) => {
+      const keepOpen = listener!(request, {}, resolve);
+      assert.equal(keepOpen, true, request.type);
+    });
 
-  assert.deepEqual(ask({ type: "pagepush:status" }), { ok: true, url: PAGE_URL });
-  const planned = ask({ type: "pagepush:plan", pack: example as never });
+  assert.deepEqual(await ask({ type: "pagepush:status" }), { ok: true, url: PAGE_URL });
+  const planned = await ask({ type: "pagepush:plan", pack: example as never });
   assert.ok(planned.ok && planned.plan);
   const plan = planned.plan!;
   assert.deepEqual(plan.errors, []);
 
-  const wrong = ask({ type: "pagepush:commit", planHash: "0".repeat(64) });
+  const wrong = await ask({ type: "pagepush:commit", planHash: "0".repeat(64) });
   assert.equal(wrong.ok, false);
   assert.equal(!wrong.ok && wrong.code, "confirm");
   assert.deepEqual(clicks, { "fb-save": 0, "fb-post": 0 });
 
-  const drafted = ask({ type: "pagepush:draft", planHash: plan.planHash });
+  const drafted = await ask({ type: "pagepush:draft", planHash: plan.planHash });
   assert.ok(drafted.ok);
   assert.deepEqual(drafted.ok && drafted.draft?.unconfirmed, []);
   assert.equal((doc.getElementById("fb-website") as HTMLInputElement).value, "https://northline.example");
   assert.deepEqual(clicks, { "fb-save": 0, "fb-post": 0 });
 
-  const committed = ask({ type: "pagepush:commit", planHash: plan.planHash });
+  const committed = await ask({ type: "pagepush:commit", planHash: plan.planHash });
   assert.deepEqual(committed.ok && committed.committed, true);
   assert.deepEqual(clicks, { "fb-save": 1, "fb-post": 1 });
 });

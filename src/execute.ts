@@ -20,14 +20,14 @@ export function approve(plan: FillPlan, at = new Date()): ConfirmToken {
   return { planHash: plan.planHash, approvedAt: at.toISOString() };
 }
 
-export function executeDraft(doc: Document, plan: FillPlan, options: RunOptions = {}): ApplyResult {
+export async function executeDraft(doc: Document, plan: FillPlan, options: RunOptions = {}): Promise<ApplyResult> {
   const applied: string[] = [];
   const unconfirmed: string[] = [];
   for (const action of plan.actions) {
     if (action.phase !== "draft") continue;
     let wrote = false;
     try {
-      wrote = writeAction(doc, action);
+      wrote = await writeAction(doc, action, options.settleMs);
     } catch {
       wrote = false;
       options.trace?.({ phase: "draft", code: "threw", actionId: action.id });
@@ -63,12 +63,12 @@ export function checkDrift(doc: Document, plan: FillPlan, ids?: readonly string[
   return drifted;
 }
 
-export function executeCommit(
+export async function executeCommit(
   doc: Document,
   plan: FillPlan,
   token: ConfirmToken | undefined,
   options: RunOptions = {},
-): void {
+): Promise<void> {
   const refuse = (code: CommitRefused["code"], message: string, applied: string[] = [], actionId?: string): never => {
     options.trace?.({ phase: "commit", code, actionId });
     throw new CommitRefused(code, message, applied);
@@ -99,7 +99,7 @@ export function executeCommit(
     if (action.phase !== "commit") continue;
     let wrote = false;
     try {
-      wrote = writeAction(doc, action);
+      wrote = await writeAction(doc, action, options.settleMs);
     } catch {
       wrote = false;
     }

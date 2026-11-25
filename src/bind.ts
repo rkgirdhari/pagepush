@@ -1,5 +1,6 @@
 import type { Control } from "./types.ts";
 import { labelKey, wordsOf } from "./util.ts";
+import { DEFAULT_SETTLE_MS, settle } from "./settle.ts";
 
 export interface Page {
   document: Document;
@@ -274,14 +275,26 @@ export function clickAdd(root: Element, addLabel: string): boolean {
   return false;
 }
 
-export function ensureCount(root: Element, label: string, count: number, addLabel?: string): Element[] {
+/**
+ * Clicks the section's add button until there are `count` labelled inputs, waiting up to
+ * `settleMs` after each click for the new row to render. Never invents a row the page refused.
+ */
+export async function ensureCount(
+  root: Element,
+  label: string,
+  count: number,
+  addLabel?: string,
+  settleMs = DEFAULT_SETTLE_MS,
+): Promise<Element[]> {
   let inputs = inputsByLabel(root, label);
   let guard = 0;
-  while (inputs.length < count && addLabel && guard < count + 1) {
+  const doc = root.ownerDocument;
+  while (inputs.length < count && addLabel && doc && guard < count + 1) {
     const before = inputs.length;
     if (!clickAdd(root, addLabel)) break;
+    const grew = await settle(doc, () => inputsByLabel(root, label).length > before, { timeoutMs: settleMs });
     inputs = inputsByLabel(root, label);
-    if (inputs.length <= before) break;
+    if (!grew) break;
     guard += 1;
   }
   return inputs;

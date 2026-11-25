@@ -62,7 +62,7 @@ async function harness(options: { pageView?: "page" | "profile" } = {}): Promise
   let broken: string | null = null;
   const runtimeListeners: Listener[] = [];
   const clipboard: string[] = [];
-  const state = { syncWrites: 0 };
+  const state = { syncWrites: 0, inflight: 0 };
 
   const chrome = {
     storage: {
@@ -78,7 +78,12 @@ async function harness(options: { pageView?: "page" | "profile" } = {}): Promise
       sendMessage: async (tabId: number, request: PanelRequest) => {
         if (broken) throw new Error(broken);
         assert.equal(tabId, TAB);
-        return structuredClone(controller.handle(structuredClone(request)));
+        state.inflight += 1;
+        try {
+          return structuredClone(await controller.handle(structuredClone(request)));
+        } finally {
+          state.inflight -= 1;
+        }
       },
       onActivated: { addListener: () => undefined },
       onRemoved: { addListener: () => undefined },
@@ -112,7 +117,11 @@ async function harness(options: { pageView?: "page" | "profile" } = {}): Promise
       await h.tick(6);
     },
     async tick(times = 3) {
-      for (let i = 0; i < times; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+      // Drafts and commits wait for the page to settle, so let in-flight page messages finish first.
+      const pass = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+      for (let i = 0; i < times; i += 1) await pass();
+      for (let guard = 0; state.inflight > 0 && guard < 2000; guard += 1) await pass();
+      for (let i = 0; i < times; i += 1) await pass();
     },
     banner() {
       return `${panel.getElementById("banner-title")!.textContent} ${panel.getElementById("banner-detail")!.textContent}`.trim();

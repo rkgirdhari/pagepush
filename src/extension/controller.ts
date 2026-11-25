@@ -23,10 +23,12 @@ export interface ControllerDeps {
   isUserEdit?: (event: Event) => boolean;
   /** Observe dialogs opening and closing. Defaults to true when MutationObserver exists. */
   watchDialogs?: boolean;
+  /** Longest wait per write step for React/Lexical to settle (ms). */
+  settleMs?: number;
 }
 
 export interface Controller {
-  handle(request: PanelRequest): ContentReply;
+  handle(request: PanelRequest): Promise<ContentReply>;
   dispose(): void;
 }
 
@@ -37,6 +39,8 @@ export function createController(deps: ControllerDeps): Controller {
   let drafted = false;
   let drift = new Set<string>();
   let lastUrl = deps.location.href;
+  /** A draft or commit in flight. A second one is refused instead of interleaving writes. */
+  let working = false;
 
   const onEdit = (event: Event): void => {
     if (!active || !drafted || !isUserEdit(event)) return;
@@ -98,8 +102,11 @@ export function createController(deps: ControllerDeps): Controller {
     return active;
   }
 
-  function handle(request: PanelRequest): ContentReply {
+  async function handle(request: PanelRequest): Promise<ContentReply> {
     const url = deps.location.href;
+    if (working && (request.type === "pagepush:draft" || request.type === "pagepush:commit" || request.type === "pagepush:plan")) {
+      return { ok: false, url, code: "busy", message: "Page Push is still writing to this page. Wait for it to finish." };
+    }
     try {
       switch (request.type) {
         case "pagepush:status":
@@ -120,7 +127,14 @@ export function createController(deps: ControllerDeps): Controller {
           const plan = current(request.planHash);
           if ("ok" in plan) return plan;
           if (plan.errors.length) return { ok: false, url, code: "blocked", message: plan.errors.map((item) => item.message).join(" ") };
-          const draft = executeDraft(doc, plan);
+          working = true;
+          let draft;
+          try {
+            draft = await executeDraft(doc, plan, { settleMs: deps.settleMs });
+          } finally {
+            working = false;
+          }
+          if (active !== plan) return { ok: false, url: deps.location.href, code: "context", message: "The page changed while drafting. Plan this view again." };
           drafted = true;
           drift = new Set();
           return { ok: true, url, draft, ...state() };
@@ -140,8 +154,9 @@ export function createController(deps: ControllerDeps): Controller {
           // Consume the approval before any click, so a retry or a double click cannot commit twice.
           active = null;
           drafted = false;
+          working = true;
           try {
-            executeCommit(doc, plan, { planHash: request.planHash, approvedAt: new Date().toISOString() });
+            await executeCommit(doc, plan, { planHash: request.planHash, approvedAt: new Date().toISOString() }, { settleMs: deps.settleMs });
           } catch (error) {
             // Refused before anything was clicked (captcha, missing file, stale field): the plan
             // and its draft still stand, so the person can fix the page and approve again.
@@ -150,6 +165,8 @@ export function createController(deps: ControllerDeps): Controller {
               drafted = true;
             }
             throw error;
+          } finally {
+            working = false;
           }
           return { ok: true, url, plan, committed: true };
         }

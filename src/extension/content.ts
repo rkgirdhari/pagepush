@@ -14,6 +14,9 @@ const controller = createController({
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse: (reply: ContentReply) => void) => {
   if (!isPanelRequest(message)) return undefined;
-  sendResponse(controller.handle(message));
-  return undefined;
+  void controller.handle(message).then(sendResponse, (error: unknown) => {
+    sendResponse({ ok: false, code: "error", message: error instanceof Error ? error.message : String(error) });
+  });
+  // Keep the channel open: drafts wait for the page to settle before answering.
+  return true;
 });

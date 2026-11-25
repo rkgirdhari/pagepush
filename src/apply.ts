@@ -14,40 +14,56 @@ import {
   widgetOf,
 } from "./bind.ts";
 import { labelKey } from "./util.ts";
+import { DEFAULT_SETTLE_MS, settle, settleFind } from "./settle.ts";
 
-export function writeAction(doc: Document, action: Action): boolean {
+/** How long each write step may wait for the page to settle. */
+interface Ctx {
+  doc: Document;
+  settleMs: number;
+}
+
+/**
+ * Writes one action and resolves true once the page shows it, waiting up to `settleMs` per step
+ * for React and Lexical to re-render. Resolves false when it never settles.
+ */
+export async function writeAction(doc: Document, action: Action, settleMs = DEFAULT_SETTLE_MS): Promise<boolean> {
+  const ctx: Ctx = { doc, settleMs };
   switch (action.kind) {
     case "text":
     case "textarea":
     case "url":
     case "email":
     case "date":
-      return writeText(doc, action);
+      return writeText(ctx, action);
     case "tags":
-      return writeTags(doc, action);
+      return writeTags(ctx, action);
     case "tokens":
-      return writeTokens(doc, action);
+      return writeTokens(ctx, action);
     case "lines":
-      return writeLines(doc, action);
+      return writeLines(ctx, action);
     case "select":
-      return writeSelect(doc, action);
+      return writeSelect(ctx, action);
     case "checkbox":
-      return writeCheck(doc, action);
+      return writeCheck(ctx, action);
     case "button":
-      return writeButton(doc, action);
+      return writeButton(ctx, action);
     case "choice":
-      return writeChoice(doc, action);
+      return writeChoice(ctx, action);
     case "invites":
-      return writeInvites(doc, action);
+      return writeInvites(ctx, action);
     case "pricing":
-      return writePricing(doc, action);
+      return writePricing(ctx, action);
     case "features":
-      return writeFeatures(doc, action);
+      return writeFeatures(ctx, action);
     case "faq":
-      return writeFaq(doc, action);
+      return writeFaq(ctx, action);
     default:
       return false;
   }
+}
+
+function until(ctx: Ctx, check: () => boolean): Promise<boolean> {
+  return settle(ctx.doc, check, { timeoutMs: ctx.settleMs });
 }
 
 export function matchesAction(doc: Document, action: Action): boolean {
@@ -79,11 +95,12 @@ export function matchesAction(doc: Document, action: Action): boolean {
   }
 }
 
-function writeText(doc: Document, action: Action): boolean {
-  const el = locate(doc, action.controlId);
+async function writeText(ctx: Ctx, action: Action): Promise<boolean> {
+  const el = locate(ctx.doc, action.controlId);
   if (!el || typeof action.value !== "string") return false;
   setValue(el, action.value);
-  return readValue(el) === action.value;
+  // Re-read by id: React may swap the element while it re-renders.
+  return until(ctx, () => readText(ctx.doc, action) === action.value);
 }
 
 function readText(doc: Document, action: Action): string {
@@ -91,15 +108,16 @@ function readText(doc: Document, action: Action): string {
   return el ? readValue(el) : "";
 }
 
-function writeTags(doc: Document, action: Action): boolean {
-  const el = locate(doc, action.controlId);
+async function writeTags(ctx: Ctx, action: Action): Promise<boolean> {
+  const el = locate(ctx.doc, action.controlId);
   const tags = stringList(action.value);
   if (!el) return false;
   const widget = widgetOf(el);
   for (const tag of tags) {
+    if (chipLanded(widget, tag)) continue;
     setValue(el, tag);
     dispatchKey(el, "keydown", "Enter");
-    if (!chipLanded(widget, tag)) {
+    if (!(await until(ctx, () => chipLanded(widget, tag)))) {
       setValue(el, "");
       return false;
     }
@@ -107,20 +125,22 @@ function writeTags(doc: Document, action: Action): boolean {
   return landedAll(widget, tags);
 }
 
-function writeTokens(doc: Document, action: Action): boolean {
-  const el = locate(doc, action.controlId);
+async function writeTokens(ctx: Ctx, action: Action): Promise<boolean> {
+  const el = locate(ctx.doc, action.controlId);
   const tokens = stringList(action.value);
   if (!el) return false;
   const widget = widgetOf(el);
   for (const token of tokens) {
+    if (tokenLanded(widget, token)) continue;
     setValue(el, token);
-    const option = optionsOf(el).find((candidate) => optionMatches(candidate, token));
+    // Typeahead options arrive after the query round trip.
+    const option = await settleFind(ctx.doc, () => optionsOf(el).find((candidate) => optionMatches(candidate, token)), { timeoutMs: ctx.settleMs });
     if (!option) {
       setValue(el, "");
       return false;
     }
     clickElement(option);
-    if (!tokenLanded(widget, token, option)) return false;
+    if (!(await until(ctx, () => tokenLanded(widget, token, option)))) return false;
   }
   return tokens.every((token) => tokenLanded(widget, token));
 }
@@ -132,18 +152,18 @@ function tokensMatch(doc: Document, action: Action): boolean {
   return stringList(action.value).every((token) => tokenLanded(widget, token));
 }
 
-function writeLines(doc: Document, action: Action): boolean {
+async function writeLines(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = linePayload(action.value);
   if (!payload) return false;
-  const root = scope(doc, action);
-  const inputs = ensureCount(root, payload.label, payload.lines.length, payload.addLabel);
+  const root = scope(ctx.doc, action);
+  const inputs = await ensureCount(root, payload.label, payload.lines.length, payload.addLabel, ctx.settleMs);
   if (inputs.length === 1 && payload.lines.length > 1 && inputs[0]!.tagName === "TEXTAREA") {
     setValue(inputs[0]!, payload.lines.join("\n"));
-    return linesMatch(doc, action);
+    return until(ctx, () => linesMatch(ctx.doc, action));
   }
   if (inputs.length < payload.lines.length) return false;
   payload.lines.forEach((line, index) => setValue(inputs[index]!, line));
-  return linesMatch(doc, action);
+  return until(ctx, () => linesMatch(ctx.doc, action));
 }
 
 function linesMatch(doc: Document, action: Action): boolean {
@@ -156,14 +176,14 @@ function linesMatch(doc: Document, action: Action): boolean {
   return payload.lines.every((line, index) => inputs[index] != null && readValue(inputs[index]!) === line);
 }
 
-function writeSelect(doc: Document, action: Action): boolean {
-  const el = locate(doc, action.controlId);
+async function writeSelect(ctx: Ctx, action: Action): Promise<boolean> {
+  const el = locate(ctx.doc, action.controlId);
   if (!el || typeof action.value !== "string") return false;
   const option = optionElements(el).find((candidate) => optionMatches(candidate, action.value as string));
   if (!option) return false;
   const optionValue = option.getAttribute("value") ?? (option.textContent ?? "").trim();
   setValue(el, optionValue);
-  return selectMatches(doc, action);
+  return until(ctx, () => selectMatches(ctx.doc, action));
 }
 
 function selectMatches(doc: Document, action: Action): boolean {
@@ -177,20 +197,19 @@ function selectMatches(doc: Document, action: Action): boolean {
   return labelKey(text) === expected || labelKey(option.getAttribute("value") ?? "") === expected;
 }
 
-function writeCheck(doc: Document, action: Action): boolean {
-  const el = locate(doc, action.controlId);
+async function writeCheck(ctx: Ctx, action: Action): Promise<boolean> {
+  const el = locate(ctx.doc, action.controlId);
   if (!el) return false;
-  setChecked(el, true);
-  return (el as HTMLInputElement).checked === true;
+  return setChecked(ctx, el, true);
 }
 
-function writeChoice(doc: Document, action: Action): boolean {
-  const group = locate(doc, action.controlId);
+async function writeChoice(ctx: Ctx, action: Action): Promise<boolean> {
+  const group = locate(ctx.doc, action.controlId);
   if (!group || typeof action.value !== "string") return false;
   const radio = radiosIn(group).find((candidate) => radioIs(candidate, action.value as string));
   if (!radio) return false;
   if (!radioChecked(radio)) activate(radio);
-  return choiceMatches(doc, action);
+  return until(ctx, () => choiceMatches(ctx.doc, action));
 }
 
 function choiceMatches(doc: Document, action: Action): boolean {
@@ -212,22 +231,23 @@ function activate(el: Element): void {
   else clickElement(el);
 }
 
-function writeButton(doc: Document, action: Action): boolean {
-  const el = locate(doc, action.controlId);
+async function writeButton(ctx: Ctx, action: Action): Promise<boolean> {
+  const el = locate(ctx.doc, action.controlId);
   if (!el) return false;
   clickElement(el);
   return true;
 }
 
-function writeInvites(doc: Document, action: Action): boolean {
+async function writeInvites(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = invitePayload(action.value);
-  const el = locate(doc, action.controlId);
+  const el = locate(ctx.doc, action.controlId);
   if (!payload || !el) return false;
   const root = widgetOf(el);
   for (const email of payload.emails) {
+    if (chipLanded(root, email)) continue;
     setValue(el, email);
     if (!clickAdd(root, payload.addLabel)) return false;
-    if (!chipLanded(root, email)) return false;
+    if (!(await until(ctx, () => chipLanded(root, email)))) return false;
   }
   return payload.emails.every((email) => chipLanded(root, email));
 }
@@ -251,11 +271,11 @@ interface PricingPayload {
   };
 }
 
-function writePricing(doc: Document, action: Action): boolean {
+async function writePricing(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = action.value as PricingPayload;
-  const root = scope(doc, action);
-  if (!selectModel(root, payload)) return false;
-  const nameInputs = ensureCount(root, payload.labels.tierName, payload.tiers.length, payload.labels.addTier);
+  const root = scope(ctx.doc, action);
+  if (!(await selectModel(ctx, root, payload))) return false;
+  const nameInputs = await ensureCount(root, payload.labels.tierName, payload.tiers.length, payload.labels.addTier, ctx.settleMs);
   if (nameInputs.length < payload.tiers.length) return false;
   for (let index = 0; index < payload.tiers.length; index += 1) {
     const tier = payload.tiers[index]!;
@@ -267,9 +287,9 @@ function writePricing(doc: Document, action: Action): boolean {
     const original = inputsByLabel(row, payload.labels.originalPrice)[0];
     if (original) setValue(original, tier.originalPrice == null ? "" : String(tier.originalPrice));
     const recommended = checkboxesByLabel(row, payload.labels.recommended)[0];
-    if (recommended) setChecked(recommended, Boolean(tier.recommended));
+    if (recommended) await setChecked(ctx, recommended, Boolean(tier.recommended));
   }
-  const featureInputs = ensureCount(root, payload.labels.feature, payload.features.length, payload.labels.addFeature);
+  const featureInputs = await ensureCount(root, payload.labels.feature, payload.features.length, payload.labels.addFeature, ctx.settleMs);
   if (featureInputs.length < payload.features.length) return false;
   for (let index = 0; index < payload.features.length; index += 1) {
     const feature = payload.features[index]!;
@@ -281,7 +301,7 @@ function writePricing(doc: Document, action: Action): boolean {
     if (cells.length < feature.values.length) return false;
     feature.values.forEach((value, cell) => setValue(cells[cell]!, value));
   }
-  return pricingMatches(doc, action);
+  return until(ctx, () => pricingMatches(ctx.doc, action));
 }
 
 function pricingMatches(doc: Document, action: Action): boolean {
@@ -314,12 +334,11 @@ function pricingMatches(doc: Document, action: Action): boolean {
   return true;
 }
 
-function selectModel(root: Element, payload: PricingPayload): boolean {
-  const radios = radiosIn(root);
-  const match = radios.find((radio) => radioMatches(radio, payload.model, payload.labels));
+async function selectModel(ctx: Ctx, root: Element, payload: PricingPayload): Promise<boolean> {
+  const match = radiosIn(root).find((radio) => radioMatches(radio, payload.model, payload.labels));
   if (!match) return false;
-  for (const radio of radios) setChecked(radio, radio === match);
-  return true;
+  // Clicking the wanted radio unchecks the rest of its group; radios cannot be clicked off.
+  return setChecked(ctx, match, true);
 }
 
 function radioMatches(radio: Element, model: string, labels: PricingPayload["labels"]): boolean {
@@ -334,13 +353,13 @@ interface FeaturePayload {
   labels: { header: string; title: string; bullets: string; add: string };
 }
 
-function writeFeatures(doc: Document, action: Action): boolean {
+async function writeFeatures(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = action.value as FeaturePayload;
-  const root = scope(doc, action);
+  const root = scope(ctx.doc, action);
   const header = inputsByLabel(root, payload.labels.header)[0];
   if (!header) return false;
   setValue(header, payload.sectionHeader);
-  const titles = ensureCount(root, payload.labels.title, payload.stories.length, payload.labels.add);
+  const titles = await ensureCount(root, payload.labels.title, payload.stories.length, payload.labels.add, ctx.settleMs);
   if (titles.length < payload.stories.length) return false;
   for (let index = 0; index < payload.stories.length; index += 1) {
     const story = payload.stories[index]!;
@@ -349,7 +368,7 @@ function writeFeatures(doc: Document, action: Action): boolean {
     if (!bullets) return false;
     setValue(bullets, story.bullets.join("\n"));
   }
-  return featuresMatch(doc, action);
+  return until(ctx, () => featuresMatch(ctx.doc, action));
 }
 
 function featuresMatch(doc: Document, action: Action): boolean {
@@ -371,10 +390,10 @@ interface FaqPayload {
   labels: { question: string; answer: string; add: string };
 }
 
-function writeFaq(doc: Document, action: Action): boolean {
+async function writeFaq(ctx: Ctx, action: Action): Promise<boolean> {
   const payload = action.value as FaqPayload;
-  const root = scope(doc, action);
-  const questions = ensureCount(root, payload.labels.question, payload.items.length, payload.labels.add);
+  const root = scope(ctx.doc, action);
+  const questions = await ensureCount(root, payload.labels.question, payload.items.length, payload.labels.add, ctx.settleMs);
   if (questions.length < payload.items.length) return false;
   for (let index = 0; index < payload.items.length; index += 1) {
     const item = payload.items[index]!;
@@ -383,7 +402,7 @@ function writeFaq(doc: Document, action: Action): boolean {
     if (!answer) return false;
     setValue(answer, item.answer);
   }
-  return faqMatches(doc, action);
+  return until(ctx, () => faqMatches(ctx.doc, action));
 }
 
 function faqMatches(doc: Document, action: Action): boolean {
@@ -415,10 +434,22 @@ function setValue(el: Element, value: string): void {
   dispatch(el, "change");
 }
 
-function setChecked(el: Element, checked: boolean): void {
-  (el as HTMLInputElement).checked = checked;
-  dispatch(el, "input");
-  dispatch(el, "change");
+/**
+ * Checks or unchecks with a real click, the way a person does, so React-controlled checkboxes,
+ * switches (role=switch / role=checkbox), and radios run their own handlers. Never sets
+ * .checked directly. Resolves once the control shows the wanted state.
+ */
+function setChecked(ctx: Ctx, el: Element, checked: boolean): Promise<boolean> {
+  if (isChecked(el) !== checked) activate(el);
+  return until(ctx, () => isChecked(el) === checked);
+}
+
+function isChecked(el: Element): boolean {
+  const role = el.getAttribute("role");
+  if (role === "checkbox" || role === "switch" || role === "radio" || role === "menuitemcheckbox") {
+    return el.getAttribute("aria-checked") === "true";
+  }
+  return (el as HTMLInputElement).checked === true;
 }
 
 function readValue(el: Element): string {

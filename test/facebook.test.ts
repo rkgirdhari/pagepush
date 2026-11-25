@@ -23,9 +23,9 @@ function value(doc: Document, id: string): string {
   return (doc.getElementById(id) as HTMLInputElement).value;
 }
 
-function refusal(fn: () => void): CommitRefused {
+async function refusal(fn: () => Promise<void>): Promise<CommitRefused> {
   try {
-    fn();
+    await fn();
   } catch (error) {
     if (error instanceof CommitRefused) return error;
     throw error;
@@ -33,7 +33,7 @@ function refusal(fn: () => void): CommitRefused {
   assert.fail("expected CommitRefused");
 }
 
-test("the create view drafts name, categories, and bio, and Create Page waits for Approve & Commit", () => {
+test("the create view drafts name, categories, and bio, and Create Page waits for Approve & Commit", async () => {
   const doc = facebookDoc({ view: "create" });
   const clicks = countClicks(doc, ["fb-create"]);
   const plan = planFacebook(doc, pack, CREATE_URL);
@@ -43,7 +43,7 @@ test("the create view drafts name, categories, and bio, and Create Page waits fo
   assert.deepEqual(plan.actions.filter((item) => item.phase === "commit").map((item) => item.id), ["createPage"]);
   assert.ok(plan.deferred.includes("website") && plan.deferred.includes("launchPost") && plan.deferred.includes("ctaType"));
 
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.deepEqual(draft.unconfirmed, [], JSON.stringify(plan.actions, null, 2));
   assert.equal(value(doc, "fb-name"), "Northline Studio");
   assert.deepEqual(
@@ -53,11 +53,11 @@ test("the create view drafts name, categories, and bio, and Create Page waits fo
   assert.equal(value(doc, "fb-bio"), pack.page.bio);
   assert.equal(clicks["fb-create"], 0);
 
-  executeCommit(doc, plan, approve(plan));
+  await executeCommit(doc, plan, approve(plan));
   assert.equal(clicks["fb-create"], 1);
 });
 
-test("the Page view drafts contact, hours, the action button, and the Lexical launch post", () => {
+test("the Page view drafts contact, hours, the action button, and the Lexical launch post", async () => {
   const doc = facebookDoc({ view: "page" });
   const clicks = countClicks(doc, ["fb-save", "fb-cta-save", "fb-post"]);
   const plan = planFacebook(doc, pack, PAGE_URL);
@@ -65,7 +65,7 @@ test("the Page view drafts contact, hours, the action button, and the Lexical la
   assert.deepEqual(plan.gates, []);
   assert.ok(plan.deferred.includes("pageName") && plan.deferred.includes("categories"));
 
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.deepEqual(draft.unconfirmed, [], JSON.stringify(plan.actions, null, 2));
   assert.equal(value(doc, "fb-website"), "https://northline.example");
   assert.equal(value(doc, "fb-cta-url"), "https://northline.example/book");
@@ -83,11 +83,11 @@ test("the Page view drafts contact, hours, the action button, and the Lexical la
   assert.deepEqual(clicks, { "fb-save": 0, "fb-cta-save": 0, "fb-post": 0 });
 
   assert.ok(plan.preview.some((line) => line === "Confirm: Post"));
-  executeCommit(doc, plan, approve(plan));
+  await executeCommit(doc, plan, approve(plan));
   assert.deepEqual(clicks, { "fb-save": 1, "fb-cta-save": 1, "fb-post": 1 });
 });
 
-test("the Essentials tier leaves hours, the action button, and the launch post out", () => {
+test("the Essentials tier leaves hours, the action button, and the launch post out", async () => {
   const doc = facebookDoc({ view: "page" });
   const clicks = countClicks(doc, ["fb-save", "fb-cta-save", "fb-post"]);
   const plan = planFacebook(doc, withPack({ tier: "essentials" }), PAGE_URL);
@@ -100,13 +100,13 @@ test("the Essentials tier leaves hours, the action button, and the launch post o
   const outOfTier = plan.warnings.filter((item) => item.code === "out-of-tier").map((item) => item.fieldId).sort();
   assert.deepEqual(outOfTier, ["address", "city", "ctaType", "ctaUrl", "hoursMode", "launchPost", "zip"]);
 
-  executeDraft(doc, plan);
-  executeCommit(doc, plan, approve(plan));
+  await executeDraft(doc, plan);
+  await executeCommit(doc, plan, approve(plan));
   assert.equal(doc.getElementById("fb-composer")!.textContent, "");
   assert.deepEqual(clicks, { "fb-save": 1, "fb-cta-save": 0, "fb-post": 0 });
 });
 
-test("a personal profile, another Page, or a non-Facebook URL is refused with no actions", () => {
+test("a personal profile, another Page, or a non-Facebook URL is refused with no actions", async () => {
   const profile = facebookDoc({ view: "profile" });
   const personal = planFacebook(profile, pack, "https://www.facebook.com/rosa.diaz");
   assert.equal(personal.actions.length, 0);
@@ -128,20 +128,20 @@ test("a personal profile, another Page, or a non-Facebook URL is refused with no
   assert.equal(facebookContext("http://www.facebook.com/pages/create"), "off-site");
   assert.equal(facebookContext(CREATE_URL), "create");
 
-  const blocked = refusal(() => executeCommit(profile, personal, approve(personal)));
+  const blocked = await refusal(() => executeCommit(profile, personal, approve(personal)));
   assert.equal(blocked.code, "blocked");
 });
 
-test("a Lexical composer that ignores every input path is reported, not silently overwritten", () => {
+test("a Lexical composer that ignores every input path is reported, not silently overwritten", async () => {
   const doc = facebookDoc({ view: "page", deafComposer: true });
   const plan = planFacebook(doc, pack, PAGE_URL);
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.deepEqual(draft.unconfirmed, ["launchPost"]);
   assert.equal(doc.getElementById("fb-composer")!.textContent, "", "no DOM text was written behind the editor's back");
-  assert.equal(refusal(() => executeCommit(doc, plan, approve(plan))).code, "stale");
+  assert.equal((await refusal(() => executeCommit(doc, plan, approve(plan)))).code, "stale");
 });
 
-test("when the native insertText pipeline reaches Lexical, no fallback hands it the text again", () => {
+test("when the native insertText pipeline reaches Lexical, no fallback hands it the text again", async () => {
   const doc = facebookDoc({ view: "page" });
   const composer = doc.getElementById("fb-composer")!;
   const deliveries: string[] = [];
@@ -156,37 +156,37 @@ test("when the native insertText pipeline reaches Lexical, no fallback hands it 
       return true;
     };
   const plan = planFacebook(doc, pack, PAGE_URL);
-  const draft = executeDraft(doc, plan);
+  const draft = await executeDraft(doc, plan);
   assert.deepEqual(draft.unconfirmed, []);
   assert.deepEqual(deliveries, ["beforeinput"]);
   assert.equal(composer.querySelectorAll("p").length, 3);
 });
 
-test("Cloudflare Turnstile blocks commit until a person solves it", () => {
+test("Cloudflare Turnstile blocks commit until a person solves it", async () => {
   const doc = facebookDoc({ view: "create", captcha: true });
   const clicks = countClicks(doc, ["fb-create"]);
   const plan = planFacebook(doc, pack, CREATE_URL);
   assert.equal(plan.gates[0]?.code, "captcha");
-  executeDraft(doc, plan);
-  assert.equal(refusal(() => executeCommit(doc, plan, approve(plan))).code, "captcha");
+  await executeDraft(doc, plan);
+  assert.equal((await refusal(() => executeCommit(doc, plan, approve(plan)))).code, "captcha");
   assert.equal(clicks["fb-create"], 0);
   (doc.querySelector("[name='cf-turnstile-response']") as HTMLInputElement).value = "solved-by-person";
-  executeCommit(doc, plan, approve(plan));
+  await executeCommit(doc, plan, approve(plan));
   assert.equal(clicks["fb-create"], 1);
 });
 
-test("a required cover photo blocks commit until the person attaches it", () => {
+test("a required cover photo blocks commit until the person attaches it", async () => {
   const doc = facebookDoc({ view: "page" });
   const plan = planFacebook(doc, withPack({ media: { coverPhoto: "required" } }), PAGE_URL);
   assert.deepEqual(plan.gates.map((gate) => gate.fieldId), ["coverPhoto"]);
   assert.equal(plan.preview.some((line) => line.startsWith("Cover photo:")), false);
-  executeDraft(doc, plan);
-  assert.equal(refusal(() => executeCommit(doc, plan, approve(plan))).code, "file");
+  await executeDraft(doc, plan);
+  assert.equal((await refusal(() => executeCommit(doc, plan, approve(plan)))).code, "file");
   attachFiles(doc, "fb-cover", ["cover.png"]);
-  executeCommit(doc, plan, approve(plan));
+  await executeCommit(doc, plan, approve(plan));
 });
 
-test("categories, hours, and buttons must be options Facebook lists, and limits apply", () => {
+test("categories, hours, and buttons must be options Facebook lists, and limits apply", async () => {
   const doc = facebookDoc({ view: "create" });
   const plan = planFacebook(doc, withPack({
     page: { name: "Northline Studio", categories: ["Space Agency"], bio: "x".repeat(102) },
@@ -202,26 +202,26 @@ test("categories, hours, and buttons must be options Facebook lists, and limits 
   assert.ok(hours.errors.some((item) => item.fieldId === "hoursMode" && item.code === "enum"));
 });
 
-test("a pack that carries a credential is blocked before anything is written", () => {
+test("a pack that carries a credential is blocked before anything is written", async () => {
   const doc = facebookDoc({ view: "create" });
   const leaky = { ...structuredClone(pack), password: "hunter2" } as unknown as FacebookPack;
   const plan = planFacebook(doc, leaky, CREATE_URL);
   assert.ok(plan.errors.some((item) => item.code === "secret" && item.fieldId === "password"));
-  assert.equal(refusal(() => executeCommit(doc, plan, approve(plan))).code, "blocked");
+  assert.equal((await refusal(() => executeCommit(doc, plan, approve(plan)))).code, "blocked");
 });
 
-test("an edit after approval refuses the commit", () => {
+test("an edit after approval refuses the commit", async () => {
   const doc = facebookDoc({ view: "page" });
   const clicks = countClicks(doc, ["fb-save"]);
   const plan = planFacebook(doc, pack, PAGE_URL);
-  executeDraft(doc, plan);
+  await executeDraft(doc, plan);
   const token = approve(plan);
   (doc.getElementById("fb-phone") as HTMLInputElement).value = "+1 503 555 9999";
-  assert.equal(refusal(() => executeCommit(doc, plan, token)).code, "stale");
+  assert.equal((await refusal(() => executeCommit(doc, plan, token))).code, "stale");
   assert.equal(clicks["fb-save"], 0);
 });
 
-test("the tier is part of the plan hash", () => {
+test("the tier is part of the plan hash", async () => {
   const launch = planFacebook(facebookDoc({ view: "create" }), pack, CREATE_URL);
   const standard = planFacebook(facebookDoc({ view: "create" }), withPack({ tier: "standard" }), CREATE_URL);
   assert.notEqual(launch.planHash, standard.planHash);
